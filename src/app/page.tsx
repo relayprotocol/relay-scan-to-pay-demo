@@ -1,9 +1,9 @@
-"use client"
+"use client";
 
-import Link from "next/link"
-import { useMemo } from "react"
-import { QRCodeSVG } from "qrcode.react"
-import { RelayLogo } from "@/components/icons/RelayLogo"
+import Link from "next/link";
+import { useMemo } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { RelayLogo } from "@/components/icons/RelayLogo";
 
 // Pre-generated demo payment intent
 const demoPaymentIntent = {
@@ -17,13 +17,13 @@ const demoPaymentIntent = {
   description: "Coffee + Pastry",
   tradeType: "EXACT_OUTPUT" as const,
   createdAt: new Date().toISOString(),
-}
+};
 
 export default function Home() {
   const demoCheckoutUrl = useMemo(() => {
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
-    return `${baseUrl}/checkout?intent=${encodeURIComponent(JSON.stringify(demoPaymentIntent))}`
-  }, [])
+    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
+    return `${baseUrl}/checkout?intent=${encodeURIComponent(JSON.stringify(demoPaymentIntent))}`;
+  }, []);
 
   return (
     <main className="min-h-screen p-8">
@@ -54,8 +54,8 @@ export default function Home() {
             >
               Relay
             </a>
-            . Merchants generate QR codes specifying their desired payment token, and customers can
-            pay with any asset from any chain.
+            . Merchants generate QR codes specifying their desired payment
+            token, and customers can pay with any asset from any chain.
           </p>
         </div>
 
@@ -69,7 +69,8 @@ export default function Home() {
               </div>
               <h3 className="font-medium mb-1">Merchant generates QR</h3>
               <p className="text-sm text-muted-foreground">
-                Specify the token, amount, and recipient address for the payment.
+                Specify the token, amount, and recipient address for the
+                payment.
               </p>
             </div>
             <div className="p-4 border rounded-lg bg-card">
@@ -121,7 +122,9 @@ export default function Home() {
               </div>
               <div className="text-center">
                 <p className="text-sm font-medium">5 USDC on Base</p>
-                <p className="text-xs text-muted-foreground">Demo Coffee Shop</p>
+                <p className="text-xs text-muted-foreground">
+                  Demo Coffee Shop
+                </p>
               </div>
               <Link
                 href={`/checkout?intent=${encodeURIComponent(JSON.stringify(demoPaymentIntent))}`}
@@ -144,9 +147,7 @@ export default function Home() {
           >
             <RelayLogo width={80} height={22} />
           </a>
-          <p className="text-xs text-muted-foreground mt-3">
-            Cross-chain token transfers and swaps
-          </p>
+
           <div className="flex items-center justify-center gap-4 mt-4">
             <a
               href="https://docs.relay.link"
@@ -169,5 +170,5 @@ export default function Home() {
         </div>
       </div>
     </main>
-  )
+  );
 }

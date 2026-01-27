@@ -1,80 +1,85 @@
-"use client"
+"use client";
 
-import { PrivyProvider } from "@privy-io/react-auth"
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { WagmiProvider, createConfig, http } from "wagmi"
-import { useMemo, useState, createContext, useContext } from "react"
-import { mainnet, base, optimism, arbitrum, polygon } from "wagmi/chains"
-import type { Chain } from "viem"
+import { PrivyProvider } from "@privy-io/react-auth";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { WagmiProvider, createConfig, http } from "wagmi";
+import { useMemo, useState, createContext, useContext } from "react";
+import { mainnet, base, optimism, arbitrum, polygon } from "wagmi/chains";
+import type { Chain } from "viem";
 import {
-  relayChainToViemChain,
-  fallbackChains,
-  type RelayChainData,
-} from "@/lib/relay"
+  createClient as createRelayClient,
+  convertViemChainToRelayChain,
+  MAINNET_RELAY_API,
+} from "@relayprotocol/relay-sdk";
+import { relayChainToViemChain, type RelayChainData } from "@/lib/relay";
 
 // Context for sharing chain data
 interface ChainsContextType {
-  chains: RelayChainData[]
+  chains: RelayChainData[];
 }
 
-const ChainsContext = createContext<ChainsContextType>({ chains: [] })
+const ChainsContext = createContext<ChainsContextType>({ chains: [] });
 
-export const useRelayChains = () => useContext(ChainsContext)
+export const useRelayChains = () => useContext(ChainsContext);
 
 // Fallback viem chains
 const fallbackViemChains: [Chain, ...Chain[]] = [
-  base,
   mainnet,
+  base,
   optimism,
   arbitrum,
   polygon,
-]
+];
 
 // Create wagmi config from chains
 function createWagmiConfig(viemChains: Chain[]) {
   const chains =
     viemChains.length > 0
       ? (viemChains as [Chain, ...Chain[]])
-      : fallbackViemChains
+      : fallbackViemChains;
 
-  const transports: Record<number, ReturnType<typeof http>> = {}
+  const transports: Record<number, ReturnType<typeof http>> = {};
   for (const chain of chains) {
-    const rpcUrl = chain.rpcUrls.default.http[0]
-    transports[chain.id] = http(rpcUrl || undefined)
+    const rpcUrl = chain.rpcUrls.default.http[0];
+    transports[chain.id] = http(rpcUrl || undefined);
   }
 
   return createConfig({
     chains,
     transports,
     ssr: true,
-  })
-}
-
-// Get viem chains for Privy - derived from relay chains or fallback
-function getPrivyChains(relayChains: RelayChainData[]): Chain[] {
-  if (relayChains.length === 0) {
-    return fallbackViemChains
-  }
-  return relayChains.map(relayChainToViemChain)
+  });
 }
 
 interface ProvidersProps {
-  children: React.ReactNode
-  chains?: RelayChainData[]
+  children: React.ReactNode;
+  chains?: RelayChainData[];
 }
 
 export function Providers({ children, chains = [] }: ProvidersProps) {
-  const [queryClient] = useState(() => new QueryClient())
+  const [queryClient] = useState(() => new QueryClient());
 
-  // Convert relay chains to viem chains and create wagmi config
-  const wagmiConfig = useMemo(() => {
-    const viemChains = chains.map(relayChainToViemChain)
-    return createWagmiConfig(viemChains)
-  }, [chains])
+  // Convert relay chains to viem chains and create configs
+  const { wagmiConfig, privyChains } = useMemo(() => {
+    const viemChains =
+      chains.length > 0
+        ? chains.map(relayChainToViemChain)
+        : fallbackViemChains;
 
-  const privyChains = useMemo(() => getPrivyChains(chains), [chains])
+    // Initialize Relay client globally (singleton)
+    createRelayClient({
+      baseApiUrl: MAINNET_RELAY_API,
+      source: "relay-scan-to-pay-demo",
+      chains: viemChains.map(convertViemChainToRelayChain),
+    });
 
-  const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID
+    return {
+      wagmiConfig: createWagmiConfig(viemChains),
+      privyChains: viemChains,
+    };
+  }, [chains]);
+
+  const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
   const content = (
     <ChainsContext.Provider value={{ chains }}>
@@ -82,13 +87,13 @@ export function Providers({ children, chains = [] }: ProvidersProps) {
         <WagmiProvider config={wagmiConfig}>{children}</WagmiProvider>
       </QueryClientProvider>
     </ChainsContext.Provider>
-  )
+  );
 
   if (!privyAppId) {
     console.warn(
-      "NEXT_PUBLIC_PRIVY_APP_ID not set. Privy features will be disabled."
-    )
-    return content
+      "NEXT_PUBLIC_PRIVY_APP_ID not set. Privy features will be disabled.",
+    );
+    return content;
   }
 
   return (
@@ -110,5 +115,5 @@ export function Providers({ children, chains = [] }: ProvidersProps) {
     >
       {content}
     </PrivyProvider>
-  )
+  );
 }

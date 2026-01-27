@@ -1,65 +1,70 @@
-"use client"
+"use client";
 
-import { useState, useMemo } from "react"
-import { QRCodeSVG } from "qrcode.react"
-import Link from "next/link"
-import { parseUnits } from "viem"
-import { useRelayChains } from "@/providers"
-import { TokenSelectorModal, SelectedTokenButton } from "@/components/TokenSelector"
-import { AddressDisplay } from "@/components/CopyButton"
-import { truncateAddress } from "@/lib/utils"
-import type { Currency } from "@/lib/relay"
+import { useState, useMemo } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import Link from "next/link";
+import { parseUnits } from "viem";
+import { useRelayChains } from "@/providers";
+import {
+  TokenSelectorModal,
+  SelectedTokenButton,
+  AddressDisplay,
+} from "@/components/common";
+
+import type { Currency } from "@/lib/relay";
 
 // Payment intent data structure - encoded in QR code
 interface PaymentIntent {
-  destinationChainId: number
-  destinationCurrency: string
-  amount: string
-  recipient: string
-  merchantId: string
-  merchantName: string
-  orderId: string
-  description?: string
-  tradeType: "EXACT_OUTPUT"
-  createdAt: string
+  destinationChainId: number;
+  destinationCurrency: string;
+  amount: string;
+  recipient: string;
+  merchantId: string;
+  merchantName: string;
+  orderId: string;
+  description?: string;
+  tradeType: "EXACT_OUTPUT";
+  createdAt: string;
 }
 
 function generateOrderId() {
-  return `PAY-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`
+  return `PAY-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
 }
 
 export default function GenerateQRCodePage() {
-  const { chains } = useRelayChains()
+  const { chains } = useRelayChains();
 
   // Form state
-  const [merchantName, setMerchantName] = useState("Demo Coffee Shop")
-  const [merchantId] = useState("merchant_001")
-  const [description, setDescription] = useState("Order payment")
-  const [recipientAddress, setRecipientAddress] = useState("")
-  const [amount, setAmount] = useState("")
+  const [merchantName, setMerchantName] = useState("Demo Coffee Shop");
+  const [merchantId] = useState("merchant_001");
+  const [description, setDescription] = useState("Order payment");
+  const [recipientAddress, setRecipientAddress] = useState("");
+  const [amount, setAmount] = useState("");
 
   // Token selection
-  const [selectedChainId, setSelectedChainId] = useState<number | null>(null)
-  const [selectedCurrency, setSelectedCurrency] = useState<Currency | null>(null)
-  const [showTokenSelector, setShowTokenSelector] = useState(false)
+  const [selectedChainId, setSelectedChainId] = useState<number | null>(null);
+  const [selectedCurrency, setSelectedCurrency] = useState<Currency | null>(
+    null,
+  );
+  const [showTokenSelector, setShowTokenSelector] = useState(false);
 
   const selectedChain = useMemo(() => {
-    return chains.find((c) => c.id === selectedChainId)
-  }, [chains, selectedChainId])
+    return chains.find((c) => c.id === selectedChainId);
+  }, [chains, selectedChainId]);
 
   // Convert amount to smallest unit
   const amountInSmallestUnit = useMemo(() => {
-    if (!selectedCurrency || !amount) return "0"
+    if (!selectedCurrency || !amount) return "0";
     try {
-      return parseUnits(amount, selectedCurrency.decimals || 18).toString()
+      return parseUnits(amount, selectedCurrency.decimals || 18).toString();
     } catch {
-      return "0"
+      return "0";
     }
-  }, [amount, selectedCurrency])
+  }, [amount, selectedCurrency]);
 
   // Build the payment intent
   const paymentIntent: PaymentIntent | null = useMemo(() => {
-    if (!selectedChainId || !selectedCurrency) return null
+    if (!selectedChainId || !selectedCurrency) return null;
     return {
       destinationChainId: selectedChainId,
       destinationCurrency: selectedCurrency.address || "",
@@ -71,7 +76,7 @@ export default function GenerateQRCodePage() {
       description,
       tradeType: "EXACT_OUTPUT" as const,
       createdAt: new Date().toISOString(),
-    }
+    };
   }, [
     selectedChainId,
     selectedCurrency,
@@ -80,40 +85,46 @@ export default function GenerateQRCodePage() {
     merchantId,
     merchantName,
     description,
-  ])
+  ]);
 
   // Create the checkout URL
-  const baseUrl = typeof window !== "undefined" ? window.location.origin : ""
+  const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
   const checkoutUrl = paymentIntent
     ? `${baseUrl}/checkout?intent=${encodeURIComponent(JSON.stringify(paymentIntent))}`
-    : ""
+    : "";
 
   // Validation
-  const isValidAddress = recipientAddress.match(/^0x[a-fA-F0-9]{40}$/)
-  const isValidAmount = parseFloat(amount) > 0
+  const isValidAddress = recipientAddress.match(/^0x[a-fA-F0-9]{40}$/);
+  const isValidAmount = parseFloat(amount) > 0;
   const isValid =
     isValidAddress &&
     isValidAmount &&
     selectedChainId &&
     selectedCurrency &&
-    paymentIntent
+    paymentIntent;
 
   const handleTokenSelect = (chainId: number, currency: Currency) => {
-    setSelectedChainId(chainId)
-    setSelectedCurrency(currency)
-    setShowTokenSelector(false)
-  }
+    setSelectedChainId(chainId);
+    setSelectedCurrency(currency);
+    setShowTokenSelector(false);
+  };
 
   return (
     <main className="min-h-screen p-8">
       <div className="max-w-4xl mx-auto">
-        <Link href="/" className="text-sm text-muted-foreground hover:underline">
+        <Link
+          href="/"
+          className="text-sm text-muted-foreground hover:underline"
+        >
           ← Back to Home
         </Link>
 
-        <h1 className="text-3xl font-bold mt-4 mb-2">Generate Payment QR Code</h1>
+        <h1 className="text-3xl font-bold mt-4 mb-2">
+          Generate Payment QR Code
+        </h1>
         <p className="text-muted-foreground mb-8">
-          Configure the Relay payment parameters. The QR code will direct customers to pay using any asset.
+          Configure the Relay payment parameters. The QR code will direct
+          customers to pay using any asset.
         </p>
 
         <div className="grid md:grid-cols-2 gap-8">
@@ -124,7 +135,9 @@ export default function GenerateQRCodePage() {
               <h2 className="font-semibold text-lg">Merchant Info</h2>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Merchant Name</label>
+                <label className="block text-sm font-medium mb-2">
+                  Merchant Name
+                </label>
                 <input
                   type="text"
                   value={merchantName}
@@ -135,7 +148,9 @@ export default function GenerateQRCodePage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Description</label>
+                <label className="block text-sm font-medium mb-2">
+                  Description
+                </label>
                 <input
                   type="text"
                   value={description}
@@ -223,11 +238,16 @@ export default function GenerateQRCodePage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Chain</span>
-                    <span>{selectedChain?.displayName || selectedChain?.name}</span>
+                    <span>
+                      {selectedChain?.displayName || selectedChain?.name}
+                    </span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-muted-foreground">Recipient</span>
-                    <AddressDisplay address={recipientAddress} className="text-xs" />
+                    <AddressDisplay
+                      address={recipientAddress}
+                      className="text-xs"
+                    />
                   </div>
                 </div>
               </div>
@@ -239,7 +259,12 @@ export default function GenerateQRCodePage() {
             {isValid && paymentIntent ? (
               <>
                 <div className="bg-white p-4 rounded-lg shadow-sm">
-                  <QRCodeSVG value={checkoutUrl} size={256} level="M" includeMargin />
+                  <QRCodeSVG
+                    value={checkoutUrl}
+                    size={256}
+                    level="M"
+                    includeMargin
+                  />
                 </div>
                 <p className="mt-4 text-lg font-semibold">
                   {amount} {selectedCurrency?.symbol}
@@ -285,5 +310,5 @@ export default function GenerateQRCodePage() {
         </div>
       </div>
     </main>
-  )
+  );
 }
