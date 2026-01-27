@@ -85,7 +85,7 @@ export function Providers({
       baseApiUrl: MAINNET_RELAY_API,
       source: "relay-scan-to-pay-demo",
       chains: configuredChains,
-      pollingInterval: 10000,
+      pollingInterval: 1000,
     });
 
     return {
