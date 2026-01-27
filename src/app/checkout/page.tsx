@@ -1,18 +1,39 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Suspense, useState, useMemo, useCallback } from "react";
+import {
+  Suspense,
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  useRef,
+} from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { formatUnits, erc20Abi, type Address } from "viem";
+import { formatUnits, type WalletClient } from "viem";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { useBalance, useReadContract, useWalletClient } from "wagmi";
-import { getClient, adaptViemWallet } from "@relayprotocol/relay-sdk";
+import { useSetActiveWallet } from "@privy-io/wagmi";
+import { useWalletClient } from "wagmi";
+import { useQuote } from "@relayprotocol/relay-kit-hooks";
+import { getClient, adaptViemWallet, type ProgressData } from "@relayprotocol/relay-sdk";
 import { useRelayChains } from "@/providers";
 import { useRelayCurrencies } from "@/hooks/useRelayCurrencies";
-import { AddressDisplay, TokenSelectorModal } from "@/components/common";
+import { useTokenBalance } from "@/hooks/useTokenBalance";
+import {
+  AddressDisplay,
+  TokenSelectorModal,
+  LoadingSpinner,
+} from "@/components/common";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import type { Currency } from "@/lib/relay";
+import { getErrorMessage, formatUsd } from "@/lib/utils";
 
 // Payment intent structure (from QR code)
 interface PaymentIntent {
@@ -28,6 +49,14 @@ interface PaymentIntent {
   createdAt: string;
 }
 
+type PaymentStatus =
+  | "idle"
+  | "quoting"
+  | "approving"
+  | "processing"
+  | "success"
+  | "error";
+
 function CheckoutContent() {
   const searchParams = useSearchParams();
   const intentParam = searchParams.get("intent");
@@ -36,13 +65,29 @@ function CheckoutContent() {
   // Privy hooks
   const { ready, authenticated, login, logout, user } = usePrivy();
   const { wallets } = useWallets();
+  const { setActiveWallet } = useSetActiveWallet();
 
-  const [paymentStatus, setPaymentStatus] = useState<
-    "idle" | "quoting" | "approving" | "processing" | "success" | "error"
-  >("idle");
+  // Get the active Privy wallet (first one is usually the active one)
+  const activePrivyWallet = wallets[0];
+
+  // Wagmi wallet client - synced with Privy's active wallet
+  const { data: walletClient } = useWalletClient();
+  const walletAddress = walletClient?.account?.address;
+
+  // Sync Privy's active wallet with wagmi
+  useEffect(() => {
+    if (activePrivyWallet) {
+      setActiveWallet(activePrivyWallet);
+    }
+  }, [activePrivyWallet, setActiveWallet]);
+
+  // Payment state
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
-  const [currentStep, setCurrentStep] = useState<string | null>(null);
+  const [currentStepId, setCurrentStepId] = useState<string | null>(null);
+
+  // Ref to capture the requestId when transaction starts (before quote refreshes)
+  const executedRequestIdRef = useRef<string | null>(null);
 
   // Payment token selection
   const [showTokenSelector, setShowTokenSelector] = useState(false);
@@ -52,8 +97,9 @@ function CheckoutContent() {
   const [selectedPaymentCurrency, setSelectedPaymentCurrency] =
     useState<Currency | null>(null);
 
-  // Quote state
-  const [quote, setQuote] = useState<QuoteResponse | null>(null);
+  // Track if we're in the middle of a transaction (to disable quote fetching)
+  const isTransacting =
+    paymentStatus === "approving" || paymentStatus === "processing";
 
   // Parse payment intent from URL
   let paymentIntent: PaymentIntent | null = null;
@@ -67,15 +113,73 @@ function CheckoutContent() {
     }
   }
 
-  // Fetch currency info from Relay API
-  const { data: currencies = [], isLoading: isLoadingCurrency } = useRelayCurrencies(
+  // Get Relay client singleton
+  const relayClient = getClient();
+
+  // Build quote options only when we have all required params
+  const quoteOptions = useMemo(() => {
+    if (
+      !paymentIntent ||
+      !walletAddress ||
+      !selectedPaymentChainId ||
+      !selectedPaymentCurrency
+    ) {
+      return undefined;
+    }
+
+    return {
+      user: walletAddress,
+      originChainId: selectedPaymentChainId,
+      originCurrency:
+        selectedPaymentCurrency.address ||
+        "0x0000000000000000000000000000000000000000",
+      destinationChainId: paymentIntent.destinationChainId,
+      destinationCurrency: paymentIntent.destinationCurrency,
+      amount: paymentIntent.amount,
+      recipient: paymentIntent.recipient,
+      tradeType: paymentIntent.tradeType,
+      referrer: "relay-scan-to-pay-demo",
+    };
+  }, [
+    paymentIntent,
+    walletAddress,
+    selectedPaymentChainId,
+    selectedPaymentCurrency,
+  ]);
+
+  // Use the useQuote hook from relay-kit-hooks
+  const {
+    data: quote,
+    isLoading: isLoadingQuote,
+    error: quoteError,
+    executeQuote,
+  } = useQuote(
+    relayClient,
+    walletClient ?? undefined,
+    quoteOptions,
+    undefined, // onRequest
+    undefined, // onResponse
     {
-      chainIds: paymentIntent ? [paymentIntent.destinationChainId] : [],
-      address: paymentIntent?.destinationCurrency,
-      limit: 1,
+      // Disable fetching while transacting to prevent quote changes mid-transaction
+      enabled: !isTransacting && !!quoteOptions,
+      staleTime: 30 * 1000, // 30 seconds
+      refetchInterval: isTransacting ? false : 30 * 1000, // Refetch every 30s unless transacting
     },
-    !!paymentIntent?.destinationCurrency,
+    undefined, // onError
+    undefined, // config
+    undefined, // baseApiUrl
   );
+
+  // Fetch currency info from Relay API for display
+  const { data: currencies = [], isLoading: isLoadingCurrency } =
+    useRelayCurrencies(
+      {
+        chainIds: paymentIntent ? [paymentIntent.destinationChainId] : [],
+        address: paymentIntent?.destinationCurrency,
+        limit: 1,
+      },
+      !!paymentIntent?.destinationCurrency,
+    );
 
   const currency = currencies[0];
 
@@ -94,10 +198,6 @@ function CheckoutContent() {
 
   const currencySymbol = currency?.symbol || "";
 
-  // Get primary wallet
-  const primaryWallet = wallets[0];
-  const walletAddress = primaryWallet?.address as Address | undefined;
-
   // Get selected payment chain for display
   const selectedPaymentChain = useMemo(() => {
     if (!selectedPaymentChainId) return null;
@@ -105,139 +205,133 @@ function CheckoutContent() {
   }, [chains, selectedPaymentChainId]);
 
   // Check balance of selected payment token
-  const { data: balanceData, isLoading: isLoadingBalance } = useBalance({
+  const {
+    balance: tokenBalance,
+    formatted: formattedBalance,
+    decimals: tokenDecimals,
+    isLoading: isLoadingBalance,
+  } = useTokenBalance({
     address: walletAddress,
     chainId: selectedPaymentChainId ?? undefined,
-    token: selectedPaymentCurrency?.address
-      ? (selectedPaymentCurrency.address as Address)
-      : undefined,
-    query: {
-      enabled: !!walletAddress && !!selectedPaymentChainId,
-    },
+    tokenAddress: selectedPaymentCurrency?.address,
+    decimals: selectedPaymentCurrency?.decimals,
+    enabled: !!walletAddress && !!selectedPaymentChainId,
   });
 
   // Check if user has enough balance (compare with quote if available)
   const hasEnoughBalance = useMemo(() => {
-    if (!balanceData || !quote) return true; // Assume enough if we don't have data yet
+    if (tokenBalance === undefined || !quote) return true; // Assume enough if we don't have data yet
     const requiredAmount = BigInt(quote.details?.currencyIn?.amount || "0");
-    return balanceData.value >= requiredAmount;
-  }, [balanceData, quote]);
-
-  // Format balance for display
-  const formattedBalance = useMemo(() => {
-    if (!balanceData) return null;
-    return formatUnits(balanceData.value, balanceData.decimals);
-  }, [balanceData]);
+    return tokenBalance >= requiredAmount;
+  }, [tokenBalance, quote]);
 
   // Handle token selection
   const handleTokenSelect = useCallback(
     (chainId: number, currency: Currency) => {
       setSelectedPaymentChainId(chainId);
       setSelectedPaymentCurrency(currency);
-      setQuote(null); // Reset quote when token changes
     },
     [],
   );
 
-  const handlePay = async () => {
-    if (!paymentIntent || !primaryWallet || !walletAddress) return;
+  // Handle payment execution
+  const handlePay = useCallback(async () => {
+    // Validate we have everything we need
+    if (!walletClient) {
+      setErrorMessage("No wallet connected");
+      return;
+    }
+
+    if (!quote) {
+      setErrorMessage("No quote available");
+      return;
+    }
+
     if (!selectedPaymentChainId || !selectedPaymentCurrency) {
       setErrorMessage("Please select a payment token");
       return;
     }
 
-    setPaymentStatus("quoting");
+    // Check balance
+    if (tokenBalance !== undefined) {
+      const requiredAmount = BigInt(quote.details?.currencyIn?.amount || "0");
+      if (tokenBalance < requiredAmount) {
+        setErrorMessage(
+          `Insufficient balance. You need ${formatUnits(requiredAmount, tokenDecimals)} ${selectedPaymentCurrency.symbol} but only have ${formattedBalance}`,
+        );
+        return;
+      }
+    }
+
+    // Capture the requestId before we start (quote may refresh during tx)
+    executedRequestIdRef.current = quote.steps?.[0]?.requestId || null;
+
+    // Reset state
+    setPaymentStatus("approving");
     setErrorMessage(null);
-    setTxHash(null);
-    setCurrentStep(null);
+    setCurrentStepId(null);
 
     try {
-      // Get a viem wallet client from Privy
-      const walletClient = await primaryWallet;
+      // Adapt the wallet for Relay SDK
+      const adaptedWallet = adaptViemWallet(walletClient as WalletClient);
 
-      // Create adapted wallet for Relay SDK
-      const adaptedWallet = adaptViemWallet(walletClient);
+      // Check if we need to switch chains
+      const activeWalletChainId = await adaptedWallet.getChainId();
+      const targetChainId = selectedPaymentChainId;
 
-      // Get fresh quote from Relay
-
-      const quoteResponse = await relayClient.actions.getQuote({
-        chainId: selectedPaymentChainId,
-        toChainId: paymentIntent.destinationChainId,
-        currency:
-          selectedPaymentCurrency.address ||
-          "0x0000000000000000000000000000000000000000",
-        toCurrency: paymentIntent.destinationCurrency,
-        tradeType: "EXACT_OUTPUT",
-        amount: paymentIntent.amount,
-        recipient: paymentIntent.recipient,
-        wallet: adaptedWallet,
-      });
-
-      setQuote(quoteResponse);
-
-      // Check balance against quote
-      if (balanceData) {
-        const requiredAmount = BigInt(
-          quoteResponse.details?.currencyIn?.amount || "0",
+      if (targetChainId && targetChainId !== activeWalletChainId) {
+        console.log(
+          `Switching chain from ${activeWalletChainId} to ${targetChainId}`,
         );
-        if (balanceData.value < requiredAmount) {
-          setPaymentStatus("error");
-          setErrorMessage(
-            `Insufficient balance. You need ${formatUnits(requiredAmount, balanceData.decimals)} ${selectedPaymentCurrency.symbol} but only have ${formattedBalance}`,
-          );
-          return;
-        }
+        await adaptedWallet.switchChain(targetChainId);
       }
 
-      setPaymentStatus("approving");
+      // Execute the quote with progress tracking
+      await executeQuote((progress: ProgressData) => {
+        console.log("Relay progress:", progress);
 
-      // Execute the transaction with progress tracking
-      await relayClient.actions.execute({
-        quote: quoteResponse,
-        wallet: adaptedWallet,
-        onProgress: (
-          progress: Execute["onProgress"] extends (cb: infer P) => void
-            ? P extends (data: infer D) => void
-              ? D
-              : never
-            : never,
-        ) => {
-          console.log("Relay progress:", progress);
+        // Track current step for UI feedback
+        if (progress.currentStep) {
+          const stepId = progress.currentStep.id;
+          setCurrentStepId(stepId);
 
-          // Track transaction hashes
-          if (progress.txHashes && progress.txHashes.length > 0) {
-            setTxHash(progress.txHashes[0].txHash);
+          // Update status based on step type
+          // Handle combined steps like "approve-and-deposit"
+          if (stepId.includes("approve") && !stepId.includes("deposit")) {
+            setPaymentStatus("approving");
+          } else {
+            // Any step that involves actual transaction (deposit, swap, send, approve-and-deposit, etc.)
+            setPaymentStatus("processing");
           }
+        }
 
-          // Track current step
-          if (progress.currentStep) {
-            const stepId = progress.currentStep.id;
-            setCurrentStep(stepId);
-
-            if (stepId === "approve") {
-              setPaymentStatus("approving");
-            } else if (stepId === "deposit" || stepId === "swap") {
-              setPaymentStatus("processing");
-            }
-          }
-
-          // Check for completion
-          const allStepsComplete = progress.steps?.every(
-            (step) => step.status === "complete",
-          );
-          if (allStepsComplete) {
-            setPaymentStatus("success");
-          }
-        },
+        // Check for completion
+        const allStepsComplete = progress.steps?.every(
+          (step) =>
+            step.items?.every((item) => item.status === "complete") ?? false,
+        );
+        if (allStepsComplete) {
+          setPaymentStatus("success");
+        }
       });
 
+      // If we get here without error, mark as success
       setPaymentStatus("success");
     } catch (err) {
       console.error("Payment error:", err);
       setPaymentStatus("error");
       setErrorMessage(err instanceof Error ? err.message : "Payment failed");
     }
-  };
+  }, [
+    walletClient,
+    quote,
+    selectedPaymentChainId,
+    selectedPaymentCurrency,
+    tokenBalance,
+    tokenDecimals,
+    formattedBalance,
+    executeQuote,
+  ]);
 
   // No intent provided
   if (!intentParam) {
@@ -295,21 +389,25 @@ function CheckoutContent() {
           </p>
           <div className="text-sm text-muted-foreground space-y-1">
             <p>Order ID: {paymentIntent.orderId}</p>
-            <p className="flex items-center justify-center gap-1">
-              Recipient: <AddressDisplay address={paymentIntent.recipient} />
-            </p>
-            {txHash && (
-              <p className="flex items-center justify-center gap-1">
-                Transaction: <AddressDisplay address={txHash} />
-              </p>
-            )}
           </div>
-          <Link
-            href="/"
-            className="inline-block mt-4 text-primary hover:underline"
-          >
-            Done
-          </Link>
+          <div className="flex flex-col gap-3 mt-4">
+            {executedRequestIdRef.current && (
+              <a
+                href={`https://relay.link/transaction/${executedRequestIdRef.current}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                View on Relay
+              </a>
+            )}
+            <Link
+              href="/"
+              className="text-sm text-muted-foreground hover:underline"
+            >
+              Back to home
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -445,9 +543,9 @@ function CheckoutContent() {
                 </div>
               </div>
 
-              {/* Pay With Selection */}
+              {/* Payment Method & Total */}
               <div className="border rounded-lg p-4 bg-card">
-                <h2 className="font-medium mb-2">Pay with</h2>
+                <h2 className="font-medium mb-2">Payment method</h2>
                 <button
                   onClick={() => setShowTokenSelector(true)}
                   className="w-full flex items-center gap-3 p-3 border rounded-md bg-muted/50 hover:bg-muted transition-colors text-left"
@@ -535,23 +633,110 @@ function CheckoutContent() {
                     Change →
                   </span>
                 </button>
+
+                {/* Total & price breakdown */}
+                {selectedPaymentCurrency && (
+                  <div className="mt-4 pt-4 border-t">
+                    {isLoadingQuote ? (
+                      <div className="flex justify-between items-baseline">
+                        <span className="text-base font-medium">Total</span>
+                        <Skeleton className="h-7 w-20" />
+                      </div>
+                    ) : quoteError ? (
+                      <p className="text-sm text-destructive">
+                        {getErrorMessage(quoteError)}
+                      </p>
+                    ) : quote ? (
+                      <>
+                        {/* Total */}
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-base font-medium">Total</span>
+                          <span className="text-xl font-bold">
+                            {formatUsd(quote.details?.currencyIn?.amountUsd)}
+                          </span>
+                        </div>
+                        {/* Breakdown accordion */}
+                        {quote.fees && (
+                          <Accordion type="single" collapsible className="mt-1">
+                            <AccordionItem value="fees" className="border-none">
+                              <AccordionTrigger className="py-1 text-xs text-muted-foreground hover:no-underline">
+                                Breakdown
+                              </AccordionTrigger>
+                              <AccordionContent className="pb-0">
+                                <div className="space-y-1.5 text-xs text-muted-foreground">
+                                  {/* Item cost */}
+                                  <div className="flex justify-between">
+                                    <span>Item</span>
+                                    <span>
+                                      {formatUsd(
+                                        quote.details?.currencyOut?.amountUsd,
+                                      )}
+                                    </span>
+                                  </div>
+                                  {/* Fees */}
+                                  {quote.fees.gas?.amountUsd && (
+                                    <div className="flex justify-between">
+                                      <span>Network fee</span>
+                                      <span>
+                                        {formatUsd(quote.fees.gas.amountUsd)}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {quote.fees.relayer?.amountUsd && (
+                                    <div className="flex justify-between">
+                                      <span>Relayer fee</span>
+                                      <span>
+                                        {formatUsd(
+                                          quote.fees.relayer.amountUsd,
+                                        )}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {quote.fees.relayerGas?.amountUsd && (
+                                    <div className="flex justify-between">
+                                      <span>Relayer gas</span>
+                                      <span>
+                                        {formatUsd(
+                                          quote.fees.relayerGas.amountUsd,
+                                        )}
+                                      </span>
+                                    </div>
+                                  )}
+                                  {quote.fees.relayerService?.amountUsd && (
+                                    <div className="flex justify-between">
+                                      <span>Service fee</span>
+                                      <span>
+                                        {formatUsd(
+                                          quote.fees.relayerService.amountUsd,
+                                        )}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </AccordionContent>
+                            </AccordionItem>
+                          </Accordion>
+                        )}
+                      </>
+                    ) : null}
+                  </div>
+                )}
+
                 {!hasEnoughBalance && selectedPaymentCurrency && quote && (
                   <p className="mt-2 text-xs text-destructive">
                     Insufficient balance for this payment
                   </p>
                 )}
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Powered by Relay - pay with any asset
-                </p>
               </div>
 
               <button
                 onClick={handlePay}
                 disabled={
+                  isTransacting ||
                   paymentStatus === "quoting" ||
-                  paymentStatus === "approving" ||
-                  paymentStatus === "processing" ||
                   !selectedPaymentCurrency ||
+                  !quote ||
+                  isLoadingQuote ||
                   (!hasEnoughBalance && !!quote) ||
                   isLoadingCurrency
                 }
@@ -559,72 +744,27 @@ function CheckoutContent() {
               >
                 {isLoadingCurrency ? (
                   <Skeleton className="h-5 w-32 mx-auto bg-primary-foreground/20" />
-                ) : paymentStatus === "quoting" ? (
+                ) : isLoadingQuote ? (
                   <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
+                    <LoadingSpinner />
                     Getting quote...
                   </span>
                 ) : paymentStatus === "approving" ? (
                   <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    Approve in wallet...
+                    <LoadingSpinner />
+                    Confirm in wallet...
                   </span>
                 ) : paymentStatus === "processing" ? (
                   <span className="flex items-center justify-center gap-2">
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                        fill="none"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    {currentStep
-                      ? `Processing ${currentStep}...`
-                      : "Processing payment..."}
+                    <LoadingSpinner />
+                    Processing payment...
                   </span>
                 ) : !selectedPaymentCurrency ? (
-                  "Select a payment token"
+                  "Select payment method"
+                ) : !quote ? (
+                  "Select payment method"
                 ) : (
-                  `Pay ${formattedAmount} ${currencySymbol}`
+                  "Pay now"
                 )}
               </button>
             </>
@@ -650,6 +790,17 @@ function CheckoutContent() {
             {JSON.stringify(paymentIntent, null, 2)}
           </pre>
         </details>
+
+        {quote && (
+          <details className="mt-2 text-xs overflow-hidden">
+            <summary className="cursor-pointer text-muted-foreground">
+              Debug: Quote Response
+            </summary>
+            <pre className="mt-2 p-2 bg-muted rounded overflow-x-auto max-h-48 whitespace-pre-wrap break-all">
+              {JSON.stringify(quote, null, 2)}
+            </pre>
+          </details>
+        )}
 
         {/* Token Selector Modal */}
         <TokenSelectorModal

@@ -3,13 +3,22 @@ import {
   convertViemChainToRelayChain,
   MAINNET_RELAY_API,
   type RelayChain,
+  type RelayAPIChain,
   type paths,
 } from "@relayprotocol/relay-sdk";
 import { mainnet, base, optimism, arbitrum, polygon } from "viem/chains";
 import type { Chain } from "viem";
 
 export { MAINNET_RELAY_API };
-export type { RelayChain, paths };
+export type { RelayChain, RelayAPIChain, paths };
+
+// Assets API for chain icons
+export const ASSETS_RELAY_API = "https://assets.relay.link";
+
+// Get squared light icon URL for a chain
+export function getChainSquaredIconUrl(chainId: number): string {
+  return `${ASSETS_RELAY_API}/icons/square/${chainId}/light.png`;
+}
 
 // Extract types from Relau SDK's OpenAPI paths
 export type ChainsResponse =
@@ -73,7 +82,7 @@ export function relayChainToViemChain(chain: RelayChainData): Chain {
 
 // API fetchers
 
-export async function fetchChains(): Promise<RelayChainData[]> {
+export async function fetchChains(): Promise<RelayAPIChain[]> {
   const response = await fetch(`${MAINNET_RELAY_API}/chains`, {
     next: { revalidate: 300 }, // Cache for 5 minutes in Next.js
   });
@@ -84,9 +93,10 @@ export async function fetchChains(): Promise<RelayChainData[]> {
 
   const data: ChainsResponse = await response.json();
 
-  // Filter to enabled chains
+  // Filter to enabled chains and cast to RelayAPIChain (API always returns full objects)
   return (data.chains || []).filter(
-    (chain) => chain.depositEnabled && !chain.disabled,
+    (chain): chain is RelayAPIChain =>
+      chain.depositEnabled === true && !chain.disabled,
   );
 }
 

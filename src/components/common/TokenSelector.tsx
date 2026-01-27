@@ -1,35 +1,36 @@
-"use client"
+"use client";
 
-import { useState, useMemo, useEffect } from "react"
-import Image from "next/image"
-import { Search, Check, ChevronDown, X, ShieldCheck, Plus } from "lucide-react"
-import { useRelayChains } from "@/providers"
-import { useRelayCurrencies } from "@/hooks/useRelayCurrencies"
-import type { RelayChainData, Currency } from "@/lib/relay"
-import { cn, truncateAddress } from "@/lib/utils"
-import { AllChainsIcon } from "@/components/icons/AllChainsIcon"
-import { TokenIcon, TokenIconSkeleton } from "@/components/common/TokenIcon"
+import { useState, useMemo, useEffect } from "react";
+import Image from "next/image";
+import { Search, Check, ChevronDown, X, ShieldCheck, Plus } from "lucide-react";
+import type { RelayChain } from "@relayprotocol/relay-sdk";
+import { useRelayChains } from "@/providers";
+import { useRelayCurrencies } from "@/hooks/useRelayCurrencies";
+import { getChainSquaredIconUrl, type Currency } from "@/lib/relay";
+import { cn, truncateAddress } from "@/lib/utils";
+import { AllChainsIcon } from "@/components/icons/AllChainsIcon";
+import { TokenIcon, TokenIconSkeleton } from "@/components/common/TokenIcon";
 import {
   ResponsiveDialog,
   ResponsiveDialogContent,
   ResponsiveDialogHeader,
   ResponsiveDialogTitle,
-} from "@/components/ui/responsive-dialog"
+} from "@/components/ui/responsive-dialog";
 
 // Popular chains shown at the top (in order)
 const POPULAR_CHAIN_IDS = [
-  1,         // Ethereum
-  8453,      // Base
-  42161,     // Arbitrum
+  1, // Ethereum
+  8453, // Base
+  42161, // Arbitrum
   792703809, // Solana
-]
+];
 
 interface TokenSelectorModalProps {
-  open: boolean
-  onClose: () => void
-  selectedChainId: number | null
-  selectedCurrency: Currency | null
-  onSelect: (chainId: number, currency: Currency) => void
+  open: boolean;
+  onClose: () => void;
+  selectedChainId: number | null;
+  selectedCurrency: Currency | null;
+  onSelect: (chainId: number, currency: Currency) => void;
 }
 
 function TokenRowSkeleton() {
@@ -41,34 +42,37 @@ function TokenRowSkeleton() {
         <div className="h-3 w-24 bg-accent animate-pulse rounded" />
       </div>
     </div>
-  )
+  );
 }
 
 // Get popular chains sorted by POPULAR_CHAIN_IDS order
-function getPopularChains(chains: RelayChainData[]): RelayChainData[] {
-  return POPULAR_CHAIN_IDS
-    .map((id) => chains.find((c) => c.id === id))
-    .filter((c): c is RelayChainData => c !== undefined)
+function getPopularChains(chains: RelayChain[]): RelayChain[] {
+  return POPULAR_CHAIN_IDS.map((id) => chains.find((c) => c.id === id)).filter(
+    (c): c is RelayChain => c !== undefined,
+  );
 }
 
 // Get all chains sorted alphabetically
-function getAlphabeticalChains(chains: RelayChainData[], searchTerm: string): RelayChainData[] {
-  let filtered = chains
+function getAlphabeticalChains(
+  chains: RelayChain[],
+  searchTerm: string,
+): RelayChain[] {
+  let filtered = chains;
 
   if (searchTerm) {
-    const term = searchTerm.toLowerCase()
+    const term = searchTerm.toLowerCase();
     filtered = chains.filter(
       (c) =>
         c.displayName?.toLowerCase().includes(term) ||
-        c.name?.toLowerCase().includes(term)
-    )
+        c.name?.toLowerCase().includes(term),
+    );
   }
 
   return [...filtered].sort((a, b) => {
-    const nameA = (a.displayName || a.name || "").toLowerCase()
-    const nameB = (b.displayName || b.name || "").toLowerCase()
-    return nameA.localeCompare(nameB)
-  })
+    const nameA = (a.displayName || a.name || "").toLowerCase();
+    const nameB = (b.displayName || b.name || "").toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
 }
 
 function TokenList({
@@ -80,13 +84,13 @@ function TokenList({
   tokenSearch,
   onSelect,
 }: {
-  currencies: Currency[]
-  chains: RelayChainData[]
-  isLoading: boolean
-  selectedChainId: number | null
-  selectedCurrency: Currency | null
-  tokenSearch: string
-  onSelect: (currency: Currency) => void
+  currencies: Currency[];
+  chains: RelayChain[];
+  isLoading: boolean;
+  selectedChainId: number | null;
+  selectedCurrency: Currency | null;
+  tokenSearch: string;
+  onSelect: (currency: Currency) => void;
 }) {
   if (isLoading) {
     return (
@@ -95,7 +99,7 @@ function TokenList({
           <TokenRowSkeleton key={i} />
         ))}
       </div>
-    )
+    );
   }
 
   if (currencies.length === 0) {
@@ -106,7 +110,7 @@ function TokenList({
           <p className="text-xs mt-1">Try a different search term</p>
         )}
       </div>
-    )
+    );
   }
 
   return (
@@ -115,10 +119,10 @@ function TokenList({
         {tokenSearch ? "Search Results" : "Popular Tokens"}
       </div>
       {currencies.map((currency, idx) => {
-        const currencyChain = chains.find((c) => c.id === currency.chainId)
+        const currencyChain = chains.find((c) => c.id === currency.chainId);
         const isSelected =
           selectedChainId === currency.chainId &&
-          selectedCurrency?.address === currency.address
+          selectedCurrency?.address === currency.address;
 
         return (
           <button
@@ -126,13 +130,17 @@ function TokenList({
             onClick={() => onSelect(currency)}
             className={cn(
               "w-full px-4 py-3 flex items-center gap-3 transition-colors",
-              isSelected ? "bg-primary/10" : "hover:bg-muted/50"
+              isSelected ? "bg-primary/10" : "hover:bg-muted/50",
             )}
           >
             <TokenIcon
               tokenLogoURI={currency.metadata?.logoURI}
               tokenSymbol={currency.symbol}
-              chainIconUrl={currencyChain?.iconUrl}
+              chainIconUrl={
+                currencyChain?.id
+                  ? getChainSquaredIconUrl(currencyChain.id)
+                  : undefined
+              }
               size="md"
             />
             <div className="flex-1 min-w-0 text-left">
@@ -153,10 +161,10 @@ function TokenList({
               <ShieldCheck className="flex-shrink-0 text-blue-500 w-4 h-4" />
             )}
           </button>
-        )
+        );
       })}
     </>
-  )
+  );
 }
 
 export function TokenSelectorModal({
@@ -166,47 +174,47 @@ export function TokenSelectorModal({
   selectedCurrency,
   onSelect,
 }: TokenSelectorModalProps) {
-  const { chains } = useRelayChains()
-  const [activeChainId, setActiveChainId] = useState<number | null>(null)
-  const [chainSearch, setChainSearch] = useState("")
-  const [tokenSearch, setTokenSearch] = useState("")
-  const [debouncedTokenSearch, setDebouncedTokenSearch] = useState("")
-  const [showChainDropdown, setShowChainDropdown] = useState(false)
+  const { chains } = useRelayChains();
+  const [activeChainId, setActiveChainId] = useState<number | null>(null);
+  const [chainSearch, setChainSearch] = useState("");
+  const [tokenSearch, setTokenSearch] = useState("");
+  const [debouncedTokenSearch, setDebouncedTokenSearch] = useState("");
+  const [showChainDropdown, setShowChainDropdown] = useState(false);
 
   // Debounce token search
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedTokenSearch(tokenSearch)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [tokenSearch])
+      setDebouncedTokenSearch(tokenSearch);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [tokenSearch]);
 
   // Reset state when modal opens
   useEffect(() => {
     if (open) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setActiveChainId(selectedChainId)
-      setChainSearch("")
-      setTokenSearch("")
-      setDebouncedTokenSearch("")
-      setShowChainDropdown(false)
+      setActiveChainId(selectedChainId);
+      setChainSearch("");
+      setTokenSearch("");
+      setDebouncedTokenSearch("");
+      setShowChainDropdown(false);
     }
-  }, [open, selectedChainId])
+  }, [open, selectedChainId]);
 
   // Get popular chains and alphabetical chains separately
   const popularChains = useMemo(() => {
-    if (chainSearch) return [] // Don't show popular section when searching
-    return getPopularChains(chains)
-  }, [chains, chainSearch])
+    if (chainSearch) return []; // Don't show popular section when searching
+    return getPopularChains(chains);
+  }, [chains, chainSearch]);
 
   const alphabeticalChains = useMemo(() => {
-    return getAlphabeticalChains(chains, chainSearch)
-  }, [chains, chainSearch])
+    return getAlphabeticalChains(chains, chainSearch);
+  }, [chains, chainSearch]);
 
   const activeChain = useMemo(() => {
-    if (!activeChainId) return null
-    return chains.find((c) => c.id === activeChainId)
-  }, [chains, activeChainId])
+    if (!activeChainId) return null;
+    return chains.find((c) => c.id === activeChainId);
+  }, [chains, activeChainId]);
 
   const queryParams = useMemo(() => {
     if (debouncedTokenSearch) {
@@ -214,30 +222,33 @@ export function TokenSelectorModal({
         term: debouncedTokenSearch,
         chainIds: activeChainId ? [activeChainId] : undefined,
         limit: 50,
-      }
+      };
     }
     return {
       chainIds: activeChainId ? [activeChainId] : undefined,
       defaultList: true,
       limit: 50,
-    }
-  }, [activeChainId, debouncedTokenSearch])
+    };
+  }, [activeChainId, debouncedTokenSearch]);
 
-  const { data: currencies = [], isLoading } = useRelayCurrencies(queryParams, open)
+  const { data: currencies = [], isLoading } = useRelayCurrencies(
+    queryParams,
+    open,
+  );
 
   const handleSelect = (currency: Currency) => {
-    const chainId = currency.chainId || activeChainId
+    const chainId = currency.chainId || activeChainId;
     if (chainId) {
-      onSelect(chainId, currency)
-      onClose()
+      onSelect(chainId, currency);
+      onClose();
     }
-  }
+  };
 
   const handleChainSelect = (chainId: number | null) => {
-    setActiveChainId(chainId)
-    setShowChainDropdown(false)
-    setChainSearch("")
-  }
+    setActiveChainId(chainId);
+    setShowChainDropdown(false);
+    setChainSearch("");
+  };
 
   return (
     <ResponsiveDialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -269,9 +280,9 @@ export function TokenSelectorModal({
                 <div className="flex items-center gap-2">
                   {activeChain ? (
                     <>
-                      {activeChain.iconUrl ? (
+                      {activeChain.id ? (
                         <Image
-                          src={activeChain.iconUrl}
+                          src={getChainSquaredIconUrl(activeChain.id)}
                           alt=""
                           width={20}
                           height={20}
@@ -279,7 +290,11 @@ export function TokenSelectorModal({
                         />
                       ) : (
                         <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs">
-                          {(activeChain.displayName || activeChain.name || "?").slice(0, 2)}
+                          {(
+                            activeChain.displayName ||
+                            activeChain.name ||
+                            "?"
+                          ).slice(0, 2)}
                         </div>
                       )}
                       <span className="text-sm font-medium">
@@ -296,7 +311,7 @@ export function TokenSelectorModal({
                 <ChevronDown
                   className={cn(
                     "w-4 h-4 transition-transform",
-                    showChainDropdown && "rotate-180"
+                    showChainDropdown && "rotate-180",
                   )}
                 />
               </button>
@@ -323,12 +338,16 @@ export function TokenSelectorModal({
                       onClick={() => handleChainSelect(null)}
                       className={cn(
                         "w-full px-3 py-2.5 flex items-center gap-3 transition-colors",
-                        activeChainId === null ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                        activeChainId === null
+                          ? "bg-primary/10 text-primary"
+                          : "hover:bg-muted",
                       )}
                     >
                       <AllChainsIcon width={20} height={20} />
                       <span className="text-sm font-medium">All Chains</span>
-                      {activeChainId === null && <Check className="ml-auto w-4 h-4" />}
+                      {activeChainId === null && (
+                        <Check className="ml-auto w-4 h-4" />
+                      )}
                     </button>
 
                     {/* Popular chains */}
@@ -343,20 +362,33 @@ export function TokenSelectorModal({
                             onClick={() => handleChainSelect(chain.id!)}
                             className={cn(
                               "w-full px-3 py-2.5 flex items-center gap-3 transition-colors",
-                              activeChainId === chain.id ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                              activeChainId === chain.id
+                                ? "bg-primary/10 text-primary"
+                                : "hover:bg-muted",
                             )}
                           >
-                            {chain.iconUrl ? (
-                              <Image src={chain.iconUrl} alt="" width={20} height={20} className="rounded-full" />
+                            {chain.id ? (
+                              <Image
+                                src={getChainSquaredIconUrl(chain.id)}
+                                alt=""
+                                width={20}
+                                height={20}
+                                className="rounded-full"
+                              />
                             ) : (
                               <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
-                                {(chain.displayName || chain.name || "?").slice(0, 2)}
+                                {(chain.displayName || chain.name || "?").slice(
+                                  0,
+                                  2,
+                                )}
                               </div>
                             )}
                             <span className="text-sm font-medium truncate">
                               {chain.displayName || chain.name}
                             </span>
-                            {activeChainId === chain.id && <Check className="ml-auto flex-shrink-0 w-4 h-4" />}
+                            {activeChainId === chain.id && (
+                              <Check className="ml-auto flex-shrink-0 w-4 h-4" />
+                            )}
                           </button>
                         ))}
                       </>
@@ -372,20 +404,33 @@ export function TokenSelectorModal({
                         onClick={() => handleChainSelect(chain.id!)}
                         className={cn(
                           "w-full px-3 py-2.5 flex items-center gap-3 transition-colors",
-                          activeChainId === chain.id ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                          activeChainId === chain.id
+                            ? "bg-primary/10 text-primary"
+                            : "hover:bg-muted",
                         )}
                       >
-                        {chain.iconUrl ? (
-                          <Image src={chain.iconUrl} alt="" width={20} height={20} className="rounded-full" />
+                        {chain.id ? (
+                          <Image
+                            src={getChainSquaredIconUrl(chain.id)}
+                            alt=""
+                            width={20}
+                            height={20}
+                            className="rounded-full"
+                          />
                         ) : (
                           <div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
-                            {(chain.displayName || chain.name || "?").slice(0, 2)}
+                            {(chain.displayName || chain.name || "?").slice(
+                              0,
+                              2,
+                            )}
                           </div>
                         )}
                         <span className="text-sm font-medium truncate">
                           {chain.displayName || chain.name}
                         </span>
-                        {activeChainId === chain.id && <Check className="ml-auto flex-shrink-0 w-4 h-4" />}
+                        {activeChainId === chain.id && (
+                          <Check className="ml-auto flex-shrink-0 w-4 h-4" />
+                        )}
                       </button>
                     ))}
                   </div>
@@ -442,12 +487,16 @@ export function TokenSelectorModal({
                 onClick={() => setActiveChainId(null)}
                 className={cn(
                   "w-full px-3 py-2.5 flex items-center gap-3 transition-colors",
-                  activeChainId === null ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                  activeChainId === null
+                    ? "bg-primary/10 text-primary"
+                    : "hover:bg-muted",
                 )}
               >
                 <AllChainsIcon width={24} height={24} />
                 <span className="text-sm font-medium">All Chains</span>
-                {activeChainId === null && <Check className="ml-auto w-4 h-4" />}
+                {activeChainId === null && (
+                  <Check className="ml-auto w-4 h-4" />
+                )}
               </button>
 
               {/* Popular chains section */}
@@ -462,11 +511,19 @@ export function TokenSelectorModal({
                       onClick={() => setActiveChainId(chain.id!)}
                       className={cn(
                         "w-full px-3 py-2.5 flex items-center gap-3 transition-colors",
-                        activeChainId === chain.id ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                        activeChainId === chain.id
+                          ? "bg-primary/10 text-primary"
+                          : "hover:bg-muted",
                       )}
                     >
-                      {chain.iconUrl ? (
-                        <Image src={chain.iconUrl} alt="" width={24} height={24} className="rounded-full" />
+                      {chain.id ? (
+                        <Image
+                          src={getChainSquaredIconUrl(chain.id)}
+                          alt=""
+                          width={24}
+                          height={24}
+                          className="rounded-full"
+                        />
                       ) : (
                         <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
                           {(chain.displayName || chain.name || "?").slice(0, 2)}
@@ -475,7 +532,9 @@ export function TokenSelectorModal({
                       <span className="text-sm font-medium truncate">
                         {chain.displayName || chain.name}
                       </span>
-                      {activeChainId === chain.id && <Check className="ml-auto flex-shrink-0 w-4 h-4" />}
+                      {activeChainId === chain.id && (
+                        <Check className="ml-auto flex-shrink-0 w-4 h-4" />
+                      )}
                     </button>
                   ))}
                 </>
@@ -491,11 +550,19 @@ export function TokenSelectorModal({
                   onClick={() => setActiveChainId(chain.id!)}
                   className={cn(
                     "w-full px-3 py-2.5 flex items-center gap-3 transition-colors",
-                    activeChainId === chain.id ? "bg-primary/10 text-primary" : "hover:bg-muted"
+                    activeChainId === chain.id
+                      ? "bg-primary/10 text-primary"
+                      : "hover:bg-muted",
                   )}
                 >
-                  {chain.iconUrl ? (
-                    <Image src={chain.iconUrl} alt="" width={24} height={24} className="rounded-full" />
+                  {chain.id ? (
+                    <Image
+                      src={getChainSquaredIconUrl(chain.id)}
+                      alt=""
+                      width={24}
+                      height={24}
+                      className="rounded-full"
+                    />
                   ) : (
                     <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
                       {(chain.displayName || chain.name || "?").slice(0, 2)}
@@ -504,7 +571,9 @@ export function TokenSelectorModal({
                   <span className="text-sm font-medium truncate">
                     {chain.displayName || chain.name}
                   </span>
-                  {activeChainId === chain.id && <Check className="ml-auto flex-shrink-0 w-4 h-4" />}
+                  {activeChainId === chain.id && (
+                    <Check className="ml-auto flex-shrink-0 w-4 h-4" />
+                  )}
                 </button>
               ))}
             </div>
@@ -540,14 +609,14 @@ export function TokenSelectorModal({
         </div>
       </ResponsiveDialogContent>
     </ResponsiveDialog>
-  )
+  );
 }
 
 // Selected token button component
 interface SelectedTokenButtonProps {
-  chain: RelayChainData | undefined
-  currency: Currency | undefined
-  onClick: () => void
+  chain: RelayChain | undefined;
+  currency: Currency | undefined;
+  onClick: () => void;
 }
 
 export function SelectedTokenButton({
@@ -564,7 +633,7 @@ export function SelectedTokenButton({
         <Plus className="w-5 h-5" />
         Select a token
       </button>
-    )
+    );
   }
 
   return (
@@ -575,7 +644,7 @@ export function SelectedTokenButton({
       <TokenIcon
         tokenLogoURI={currency.metadata?.logoURI}
         tokenSymbol={currency.symbol}
-        chainIconUrl={chain?.iconUrl}
+        chainIconUrl={chain?.id ? getChainSquaredIconUrl(chain.id) : undefined}
         size="lg"
       />
       <div className="flex-1 text-left min-w-0">
@@ -586,9 +655,9 @@ export function SelectedTokenButton({
       </div>
       <ChevronDown className="text-muted-foreground flex-shrink-0 w-5 h-5" />
     </button>
-  )
+  );
 }
 
 // Legacy exports
-export const TokenSelector = TokenSelectorModal
-export const SelectedToken = SelectedTokenButton
+export const TokenSelector = TokenSelectorModal;
+export const SelectedToken = SelectedTokenButton;

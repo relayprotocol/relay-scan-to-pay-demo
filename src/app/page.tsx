@@ -55,7 +55,7 @@ export default function Home() {
               Relay
             </a>
             . Merchants generate QR codes specifying their desired payment
-            token, and customers can pay with any asset from any chain.
+            intent, and customers can pay with any asset from any chain.
           </p>
         </div>
 
