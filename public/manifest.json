@@ -1,0 +1,18 @@
+{
+  "name": "Porto Pay - Scan to Pay",
+  "short_name": "Porto Pay",
+  "description": "Scan Ethereum payment QR codes and pay with any token using Porto wallet",
+  "start_url": "/porto-scan-to-pay",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
