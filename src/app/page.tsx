@@ -136,6 +136,49 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Porto Scan-to-Pay Section */}
+        <div className="mb-12 p-6 border rounded-xl bg-gradient-to-br from-primary/5 to-primary/10">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="px-2 py-0.5 text-xs font-medium bg-primary/20 text-primary rounded-full">
+              New
+            </span>
+            <h3 className="font-semibold text-lg">Porto Scan-to-Pay</h3>
+          </div>
+          <p className="text-sm text-muted-foreground mb-4">
+            Scan any EIP-681 payment QR code with proper parsing, USD display, and
+            seamless payment flow using{" "}
+            <a
+              href="https://porto.sh"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              Porto
+            </a>{" "}
+            wallet. Fixes issues found in MetaMask and other wallets.
+          </p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <span className="px-2 py-1 text-xs bg-muted rounded-md">
+              EIP-681 Support
+            </span>
+            <span className="px-2 py-1 text-xs bg-muted rounded-md">
+              USD Amounts
+            </span>
+            <span className="px-2 py-1 text-xs bg-muted rounded-md">
+              ERC-20 Transfers
+            </span>
+            <span className="px-2 py-1 text-xs bg-muted rounded-md">
+              Multi-chain
+            </span>
+          </div>
+          <Link
+            href="/porto-scan-to-pay"
+            className="inline-flex items-center justify-center w-full sm:w-auto py-3 px-6 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            Open Scanner
+          </Link>
+        </div>
+
         {/* Powered by Relay */}
         <div className="text-center py-8 border-t">
           <p className="text-sm text-muted-foreground mb-3">Powered by</p>
