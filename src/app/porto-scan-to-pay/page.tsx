@@ -16,6 +16,8 @@ import {
   useDisconnect,
   useSendCalls,
   useReadContract,
+  useBalance,
+  usePublicClient,
 } from "wagmi";
 import { getAddress, encodeFunctionData, parseAbi, formatUnits } from "viem";
 import Link from "next/link";
@@ -194,107 +196,45 @@ export default function PortoWalletPage() {
     }
   }, [address]);
 
-  // Handle QR scan result - immediately prompt wallet
-  const handleScan = useCallback(
-    async (data: string) => {
-      console.log("Scanned QR code:", data);
-      setScannedData(data);
-      setScannerState("loading");
-      setError(null);
+  // Handle QR scan result - show preview for user to confirm
+  const handleScan = useCallback(async (data: string) => {
+    console.log("Scanned QR code:", data);
+    setScannedData(data);
+    setScannerState("loading");
+    setError(null);
 
-      try {
-        const parsed = parseEIP681(data);
+    try {
+      const parsed = parseEIP681(data);
 
-        if (!parsed) {
-          throw new Error(
-            "Invalid QR code format. Expected an Ethereum payment URI (EIP-681)."
-          );
-        }
-
-        const validation = validatePayment(parsed);
-        if (!validation.valid) {
-          throw new Error(validation.errors.join(". "));
-        }
-
-        setParsedPayment(parsed);
-
-        const resolved = await resolvePaymentAmount(parsed, {
-          maxDiscrepancy: 0.05,
-          throwOnPriceFailure: false,
-        });
-
-        setResolvedPayment(resolved);
-
-        // Skip confirmation screen - prompt wallet immediately
-        if (isConnected) {
-          setScannerState("confirming");
-
-          const toAddress = getAddress(
-            resolved.isERC20 ? resolved.tokenAddress! : resolved.to
-          );
-
-          let calls: Array<{
-            to: `0x${string}`;
-            value?: bigint;
-            data?: `0x${string}`;
-          }>;
-
-          if (!resolved.isERC20) {
-            calls = [
-              {
-                to: toAddress,
-                value: BigInt(resolved.resolvedValue),
-              },
-            ];
-          } else {
-            const recipientAddress = getAddress(resolved.recipient!);
-            const callData = encodeFunctionData({
-              abi: parseAbi([
-                "function transfer(address to, uint256 amount) returns (bool)",
-              ]),
-              functionName: "transfer",
-              args: [recipientAddress, BigInt(resolved.resolvedValue)],
-            });
-
-            calls = [
-              {
-                to: toAddress,
-                data: callData,
-              },
-            ];
-          }
-
-          sendCalls(
-            { calls },
-            {
-              onSuccess: (result) => {
-                console.log("Calls submitted:", result);
-                const id = typeof result === "string" ? result : result.id;
-                setCallsId(id);
-                setScannerState("success");
-              },
-              onError: (err) => {
-                console.error("Transaction failed:", err);
-                const friendlyError = parseWalletError(err);
-                setError(friendlyError);
-                setScannerState("error");
-              },
-            }
-          );
-        } else {
-          // Not connected - show preview to prompt connection
-          setScannerState("preview");
-        }
-      } catch (err) {
-        console.error("Failed to process QR code:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to process QR code"
+      if (!parsed) {
+        throw new Error(
+          "Invalid QR code format. Expected an Ethereum payment URI (EIP-681)."
         );
-        setScannerState("error");
       }
-    },
-    [isConnected, sendCalls]
-  );
+
+      const validation = validatePayment(parsed);
+      if (!validation.valid) {
+        throw new Error(validation.errors.join(". "));
+      }
+
+      setParsedPayment(parsed);
+
+      const resolved = await resolvePaymentAmount(parsed, {
+        maxDiscrepancy: 0.05,
+        throwOnPriceFailure: false,
+      });
+
+      setResolvedPayment(resolved);
+      // Show preview - user must click to confirm (required for popup to work)
+      setScannerState("preview");
+    } catch (err) {
+      console.error("Failed to process QR code:", err);
+      setError(
+        err instanceof Error ? err.message : "Failed to process QR code"
+      );
+      setScannerState("error");
+    }
+  }, []);
 
   // Handle scan error
   const handleScanError = useCallback((errorMsg: string) => {
@@ -318,9 +258,12 @@ export default function PortoWalletPage() {
     }
   }, [connect, connectors, portoConnector]);
 
+  // Get public client for balance checks
+  const publicClient = usePublicClient({ chainId: resolvedPayment?.chainId });
+
   // Handle payment confirmation using ERC-5792 sendCalls
   const handleConfirm = useCallback(async () => {
-    if (!resolvedPayment || !isConnected) {
+    if (!resolvedPayment || !isConnected || !address) {
       return;
     }
 
@@ -328,6 +271,50 @@ export default function PortoWalletPage() {
     setError(null);
 
     try {
+      const requiredAmount = BigInt(resolvedPayment.resolvedValue);
+
+      // Check balance before attempting transaction
+      if (resolvedPayment.isERC20 && resolvedPayment.tokenAddress) {
+        // ERC-20 balance check
+        const tokenAddress = getAddress(resolvedPayment.tokenAddress);
+
+        if (publicClient) {
+          const balance = await publicClient.readContract({
+            address: tokenAddress,
+            abi: ERC20_ABI,
+            functionName: "balanceOf",
+            args: [address],
+          });
+
+          console.log("Token balance:", balance.toString(), "Required:", requiredAmount.toString());
+
+          if (balance < requiredAmount) {
+            const symbol = resolvedPayment.symbol || "tokens";
+            const decimals = resolvedPayment.decimals || 18;
+            const balanceFormatted = formatUnits(balance, decimals);
+            const requiredFormatted = formatUnits(requiredAmount, decimals);
+            throw new Error(
+              `Insufficient balance. You have ${balanceFormatted} ${symbol} but need ${requiredFormatted} ${symbol}.`
+            );
+          }
+        }
+      } else {
+        // Native token balance check
+        if (publicClient) {
+          const balance = await publicClient.getBalance({ address });
+
+          console.log("Native balance:", balance.toString(), "Required:", requiredAmount.toString());
+
+          if (balance < requiredAmount) {
+            const balanceFormatted = formatUnits(balance, 18);
+            const requiredFormatted = formatUnits(requiredAmount, 18);
+            throw new Error(
+              `Insufficient balance. You have ${balanceFormatted} ETH but need ${requiredFormatted} ETH.`
+            );
+          }
+        }
+      }
+
       const toAddress = getAddress(
         resolvedPayment.isERC20
           ? resolvedPayment.tokenAddress!
@@ -344,7 +331,7 @@ export default function PortoWalletPage() {
         calls = [
           {
             to: toAddress,
-            value: BigInt(resolvedPayment.resolvedValue),
+            value: requiredAmount,
           },
         ];
       } else {
@@ -354,7 +341,7 @@ export default function PortoWalletPage() {
             "function transfer(address to, uint256 amount) returns (bool)",
           ]),
           functionName: "transfer",
-          args: [recipientAddress, BigInt(resolvedPayment.resolvedValue)],
+          args: [recipientAddress, requiredAmount],
         });
 
         calls = [
@@ -385,11 +372,11 @@ export default function PortoWalletPage() {
     } catch (err) {
       console.error("Failed to send transaction:", err);
       const friendlyError =
-        err instanceof Error ? parseWalletError(err) : "Transaction failed";
+        err instanceof Error ? err.message : "Transaction failed";
       setError(friendlyError);
       setScannerState("error");
     }
-  }, [resolvedPayment, isConnected, sendCalls]);
+  }, [resolvedPayment, isConnected, address, publicClient, sendCalls]);
 
   // Handle cancel/reset scanner
   const handleCancelScanner = useCallback(() => {
