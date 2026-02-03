@@ -199,7 +199,7 @@ export default function PortoWalletPage() {
     }
   }, [address]);
 
-  // Handle QR scan result - parse, check balance, and prompt wallet
+  // Handle QR scan result - parse, check balance, show preview
   const handleScan = useCallback(
     async (data: string) => {
       console.log("Scanned QR code:", data);
@@ -232,7 +232,6 @@ export default function PortoWalletPage() {
         }
 
         const tokenAddress = getAddress(parsed.tokenAddress);
-        const recipientAddress = getAddress(parsed.recipient);
         const amount = BigInt(parsed.value);
 
         // Create resolved payment for display
@@ -253,7 +252,7 @@ export default function PortoWalletPage() {
           return;
         }
 
-        // Check balance before prompting wallet
+        // Check balance before showing preview
         const publicClient = getPublicClient(config, {
           chainId: parsed.chainId,
         });
@@ -277,56 +276,8 @@ export default function PortoWalletPage() {
           }
         }
 
-        // Balance OK - switch chain if needed
-        if (currentChainId !== parsed.chainId) {
-          console.log(`Switching chain from ${currentChainId} to ${parsed.chainId}`);
-          await switchChainAsync({ chainId: parsed.chainId });
-        }
-
-        // Prompt wallet
-        setScannerState("confirming");
-
-        console.log("Sending ERC-20 transfer:", {
-          token: tokenAddress,
-          to: recipientAddress,
-          amount: amount.toString(),
-          chainId: parsed.chainId,
-        });
-
-        // Encode ERC-20 transfer call
-        const callData = encodeFunctionData({
-          abi: parseAbi([
-            "function transfer(address to, uint256 amount) returns (bool)",
-          ]),
-          functionName: "transfer",
-          args: [recipientAddress, amount],
-        });
-
-        // Send via ERC-5792 wallet_sendCalls
-        sendCalls(
-          {
-            calls: [
-              {
-                to: tokenAddress,
-                data: callData,
-              },
-            ],
-          },
-          {
-            onSuccess: (result) => {
-              console.log("Transaction submitted:", result);
-              const id = typeof result === "string" ? result : result.id;
-              setCallsId(id);
-              setScannerState("success");
-            },
-            onError: (err) => {
-              console.error("Transaction failed:", err);
-              const friendlyError = parseWalletError(err);
-              setError(friendlyError);
-              setScannerState("error");
-            },
-          }
-        );
+        // Balance OK - show preview for user to confirm
+        setScannerState("preview");
       } catch (err) {
         console.error("Failed to process QR code:", err);
         setError(
@@ -335,7 +286,7 @@ export default function PortoWalletPage() {
         setScannerState("error");
       }
     },
-    [isConnected, address, config, currentChainId, switchChainAsync, sendCalls]
+    [isConnected, address, config]
   );
 
   // Handle scan error
@@ -421,6 +372,12 @@ export default function PortoWalletPage() {
         }
       }
 
+      // Switch chain if needed
+      if (currentChainId !== resolvedPayment.chainId) {
+        console.log(`Switching chain from ${currentChainId} to ${resolvedPayment.chainId}`);
+        await switchChainAsync({ chainId: resolvedPayment.chainId });
+      }
+
       const toAddress = getAddress(
         resolvedPayment.isERC20
           ? resolvedPayment.tokenAddress!
@@ -482,7 +439,7 @@ export default function PortoWalletPage() {
       setError(friendlyError);
       setScannerState("error");
     }
-  }, [resolvedPayment, isConnected, address, config, sendCalls]);
+  }, [resolvedPayment, isConnected, address, config, currentChainId, switchChainAsync, sendCalls]);
 
   // Handle cancel/reset scanner
   const handleCancelScanner = useCallback(() => {
