@@ -2,27 +2,22 @@
 
 import Link from "next/link";
 import { useMemo } from "react";
-import { QRCodeSVG } from "qrcode.react";
 import { RelayLogo } from "@/components/icons/RelayLogo";
 
 // Pre-generated demo payment intent
 const demoPaymentIntent = {
   destinationChainId: 8453, // Base
   destinationCurrency: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC on Base
-  amount: "5000000", // 5 USDC (6 decimals)
+  amount: "1000000", // 1 USDC (6 decimals)
   recipient: "0x03508bB71268BBA25ECaCC8F620e01866650532c",
-  merchantId: "demo_merchant",
   merchantName: "Demo Coffee Shop",
-  orderId: "DEMO-001",
   description: "Coffee + Pastry",
-  tradeType: "EXACT_OUTPUT" as const,
-  createdAt: new Date().toISOString(),
 };
 
 export default function Home() {
-  const demoCheckoutUrl = useMemo(() => {
+  const demoPayUrl = useMemo(() => {
     const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-    return `${baseUrl}/checkout?intent=${encodeURIComponent(JSON.stringify(demoPaymentIntent))}`;
+    return `${baseUrl}/pay?intent=${encodeURIComponent(JSON.stringify(demoPaymentIntent))}`;
   }, []);
 
   return (
@@ -122,29 +117,22 @@ export default function Home() {
             </Link>
           </div>
 
-          {/* Demo QR */}
+          {/* Demo Payment Link */}
           <div className="p-6 border rounded-xl bg-card">
             <h3 className="font-semibold text-lg mb-2">Try the Demo</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Scan this QR or click below to try the customer checkout flow.
+              Open a demo payment link to see the customer payment experience.
             </p>
-            <div className="flex flex-col items-center gap-4">
-              <div className="bg-white p-3 rounded-lg">
-                <QRCodeSVG value={demoCheckoutUrl} size={140} level="M" />
-              </div>
-              <div className="text-center">
-                <p className="text-sm font-medium">5 USDC on Base</p>
-                <p className="text-xs text-muted-foreground">
-                  Demo Coffee Shop
-                </p>
-              </div>
-              <Link
-                href={`/checkout?intent=${encodeURIComponent(JSON.stringify(demoPaymentIntent))}`}
-                className="inline-flex items-center justify-center w-full py-3 px-4 border border-input font-medium rounded-lg hover:bg-muted transition-colors"
-              >
-                Open Checkout
-              </Link>
+            <div className="text-sm text-muted-foreground mb-4">
+              <p className="font-medium text-foreground">Demo Coffee Shop</p>
+              <p>1 USDC on Base</p>
             </div>
+            <Link
+              href={demoPayUrl}
+              className="inline-flex items-center justify-center w-full py-3 px-4 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              Open Payment Link
+            </Link>
           </div>
         </div>
 

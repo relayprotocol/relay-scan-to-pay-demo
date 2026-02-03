@@ -232,7 +232,7 @@ async function PayContent({ searchParams }: PayPageProps) {
         <div className="text-center mb-8">
           <p className="text-sm text-muted-foreground mb-2">Amount Due</p>
           <p className="text-5xl font-bold">
-            {formatUsd(currencyOut.amountUsd)}
+            {formatUsd(parseFloat(usdAmount).toFixed(2))}
           </p>
         </div>
 

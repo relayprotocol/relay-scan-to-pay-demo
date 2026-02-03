@@ -16,9 +16,9 @@ import {
   useDisconnect,
   useSendCalls,
   useReadContract,
-  useBalance,
-  usePublicClient,
+  useConfig,
 } from "wagmi";
+import { getPublicClient } from "wagmi/actions";
 import { getAddress, encodeFunctionData, parseAbi, formatUnits } from "viem";
 import Link from "next/link";
 import {
@@ -156,6 +156,7 @@ export default function PortoWalletPage() {
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending: isConnecting } = useConnect();
   const { disconnect } = useDisconnect();
+  const config = useConfig();
 
   // Use ERC-5792 sendCalls for Porto compatibility
   const { mutate: sendCalls, isPending: isSending } = useSendCalls();
@@ -196,45 +197,166 @@ export default function PortoWalletPage() {
     }
   }, [address]);
 
-  // Handle QR scan result - show preview for user to confirm
-  const handleScan = useCallback(async (data: string) => {
-    console.log("Scanned QR code:", data);
-    setScannedData(data);
-    setScannerState("loading");
-    setError(null);
+  // Handle QR scan result - check balance and prompt wallet immediately
+  const handleScan = useCallback(
+    async (data: string) => {
+      console.log("Scanned QR code:", data);
+      setScannedData(data);
+      setScannerState("loading");
+      setError(null);
 
-    try {
-      const parsed = parseEIP681(data);
+      try {
+        const parsed = parseEIP681(data);
 
-      if (!parsed) {
-        throw new Error(
-          "Invalid QR code format. Expected an Ethereum payment URI (EIP-681)."
+        if (!parsed) {
+          throw new Error(
+            "Invalid QR code format. Expected an Ethereum payment URI (EIP-681)."
+          );
+        }
+
+        const validation = validatePayment(parsed);
+        if (!validation.valid) {
+          throw new Error(validation.errors.join(". "));
+        }
+
+        setParsedPayment(parsed);
+
+        const resolved = await resolvePaymentAmount(parsed, {
+          maxDiscrepancy: 0.05,
+          throwOnPriceFailure: false,
+        });
+
+        setResolvedPayment(resolved);
+
+        // If connected, check balance and prompt wallet immediately
+        if (isConnected && address) {
+          // Get public client for the payment's chain
+          const publicClient = getPublicClient(config, {
+            chainId: resolved.chainId,
+          });
+
+          if (!publicClient) {
+            throw new Error(
+              `Unsupported chain: ${CHAIN_NAMES[resolved.chainId] || resolved.chainId}`
+            );
+          }
+
+          const requiredAmount = BigInt(resolved.resolvedValue);
+
+          // Check balance before attempting transaction
+          if (resolved.isERC20 && resolved.tokenAddress) {
+            const tokenAddress = getAddress(resolved.tokenAddress);
+            const balance = await publicClient.readContract({
+              address: tokenAddress,
+              abi: ERC20_ABI,
+              functionName: "balanceOf",
+              args: [address],
+            });
+
+            console.log(
+              "Token balance:",
+              balance.toString(),
+              "Required:",
+              requiredAmount.toString()
+            );
+
+            if (balance < requiredAmount) {
+              const symbol = resolved.symbol || "tokens";
+              const decimals = resolved.decimals || 18;
+              const balanceFormatted = formatUnits(balance, decimals);
+              const requiredFormatted = formatUnits(requiredAmount, decimals);
+              throw new Error(
+                `Insufficient balance. You have ${balanceFormatted} ${symbol} but need ${requiredFormatted} ${symbol}.`
+              );
+            }
+          } else {
+            const balance = await publicClient.getBalance({ address });
+
+            console.log(
+              "Native balance:",
+              balance.toString(),
+              "Required:",
+              requiredAmount.toString()
+            );
+
+            if (balance < requiredAmount) {
+              const balanceFormatted = formatUnits(balance, 18);
+              const requiredFormatted = formatUnits(requiredAmount, 18);
+              throw new Error(
+                `Insufficient balance. You have ${balanceFormatted} ETH but need ${requiredFormatted} ETH.`
+              );
+            }
+          }
+
+          // Balance is sufficient - prompt wallet immediately
+          setScannerState("confirming");
+
+          const toAddress = getAddress(
+            resolved.isERC20 ? resolved.tokenAddress! : resolved.to
+          );
+
+          let calls: Array<{
+            to: `0x${string}`;
+            value?: bigint;
+            data?: `0x${string}`;
+          }>;
+
+          if (!resolved.isERC20) {
+            calls = [
+              {
+                to: toAddress,
+                value: requiredAmount,
+              },
+            ];
+          } else {
+            const recipientAddress = getAddress(resolved.recipient!);
+            const callData = encodeFunctionData({
+              abi: parseAbi([
+                "function transfer(address to, uint256 amount) returns (bool)",
+              ]),
+              functionName: "transfer",
+              args: [recipientAddress, requiredAmount],
+            });
+
+            calls = [
+              {
+                to: toAddress,
+                data: callData,
+              },
+            ];
+          }
+
+          sendCalls(
+            { calls },
+            {
+              onSuccess: (result) => {
+                console.log("Calls submitted:", result);
+                const id = typeof result === "string" ? result : result.id;
+                setCallsId(id);
+                setScannerState("success");
+              },
+              onError: (err) => {
+                console.error("Transaction failed:", err);
+                const friendlyError = parseWalletError(err);
+                setError(friendlyError);
+                setScannerState("error");
+              },
+            }
+          );
+        } else {
+          // Not connected - show preview to prompt connection
+          setScannerState("preview");
+        }
+      } catch (err) {
+        console.error("Failed to process QR code:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to process QR code"
         );
+        setScannerState("error");
       }
-
-      const validation = validatePayment(parsed);
-      if (!validation.valid) {
-        throw new Error(validation.errors.join(". "));
-      }
-
-      setParsedPayment(parsed);
-
-      const resolved = await resolvePaymentAmount(parsed, {
-        maxDiscrepancy: 0.05,
-        throwOnPriceFailure: false,
-      });
-
-      setResolvedPayment(resolved);
-      // Show preview - user must click to confirm (required for popup to work)
-      setScannerState("preview");
-    } catch (err) {
-      console.error("Failed to process QR code:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to process QR code"
-      );
-      setScannerState("error");
-    }
-  }, []);
+    },
+    [isConnected, address, config, sendCalls]
+  );
 
   // Handle scan error
   const handleScanError = useCallback((errorMsg: string) => {
@@ -258,9 +380,6 @@ export default function PortoWalletPage() {
     }
   }, [connect, connectors, portoConnector]);
 
-  // Get public client for balance checks
-  const publicClient = usePublicClient({ chainId: resolvedPayment?.chainId });
-
   // Handle payment confirmation using ERC-5792 sendCalls
   const handleConfirm = useCallback(async () => {
     if (!resolvedPayment || !isConnected || !address) {
@@ -271,6 +390,17 @@ export default function PortoWalletPage() {
     setError(null);
 
     try {
+      // Get public client for the payment's chain
+      const publicClient = getPublicClient(config, {
+        chainId: resolvedPayment.chainId,
+      });
+
+      if (!publicClient) {
+        throw new Error(
+          `Unsupported chain: ${CHAIN_NAMES[resolvedPayment.chainId] || resolvedPayment.chainId}`
+        );
+      }
+
       const requiredAmount = BigInt(resolvedPayment.resolvedValue);
 
       // Check balance before attempting transaction
@@ -278,40 +408,36 @@ export default function PortoWalletPage() {
         // ERC-20 balance check
         const tokenAddress = getAddress(resolvedPayment.tokenAddress);
 
-        if (publicClient) {
-          const balance = await publicClient.readContract({
-            address: tokenAddress,
-            abi: ERC20_ABI,
-            functionName: "balanceOf",
-            args: [address],
-          });
+        const balance = await publicClient.readContract({
+          address: tokenAddress,
+          abi: ERC20_ABI,
+          functionName: "balanceOf",
+          args: [address],
+        });
 
-          console.log("Token balance:", balance.toString(), "Required:", requiredAmount.toString());
+        console.log("Token balance:", balance.toString(), "Required:", requiredAmount.toString());
 
-          if (balance < requiredAmount) {
-            const symbol = resolvedPayment.symbol || "tokens";
-            const decimals = resolvedPayment.decimals || 18;
-            const balanceFormatted = formatUnits(balance, decimals);
-            const requiredFormatted = formatUnits(requiredAmount, decimals);
-            throw new Error(
-              `Insufficient balance. You have ${balanceFormatted} ${symbol} but need ${requiredFormatted} ${symbol}.`
-            );
-          }
+        if (balance < requiredAmount) {
+          const symbol = resolvedPayment.symbol || "tokens";
+          const decimals = resolvedPayment.decimals || 18;
+          const balanceFormatted = formatUnits(balance, decimals);
+          const requiredFormatted = formatUnits(requiredAmount, decimals);
+          throw new Error(
+            `Insufficient balance. You have ${balanceFormatted} ${symbol} but need ${requiredFormatted} ${symbol}.`
+          );
         }
       } else {
         // Native token balance check
-        if (publicClient) {
-          const balance = await publicClient.getBalance({ address });
+        const balance = await publicClient.getBalance({ address });
 
-          console.log("Native balance:", balance.toString(), "Required:", requiredAmount.toString());
+        console.log("Native balance:", balance.toString(), "Required:", requiredAmount.toString());
 
-          if (balance < requiredAmount) {
-            const balanceFormatted = formatUnits(balance, 18);
-            const requiredFormatted = formatUnits(requiredAmount, 18);
-            throw new Error(
-              `Insufficient balance. You have ${balanceFormatted} ETH but need ${requiredFormatted} ETH.`
-            );
-          }
+        if (balance < requiredAmount) {
+          const balanceFormatted = formatUnits(balance, 18);
+          const requiredFormatted = formatUnits(requiredAmount, 18);
+          throw new Error(
+            `Insufficient balance. You have ${balanceFormatted} ETH but need ${requiredFormatted} ETH.`
+          );
         }
       }
 
@@ -376,7 +502,7 @@ export default function PortoWalletPage() {
       setError(friendlyError);
       setScannerState("error");
     }
-  }, [resolvedPayment, isConnected, address, publicClient, sendCalls]);
+  }, [resolvedPayment, isConnected, address, config, sendCalls]);
 
   // Handle cancel/reset scanner
   const handleCancelScanner = useCallback(() => {
