@@ -194,44 +194,107 @@ export default function PortoWalletPage() {
     }
   }, [address]);
 
-  // Handle QR scan result
-  const handleScan = useCallback(async (data: string) => {
-    console.log("Scanned QR code:", data);
-    setScannedData(data);
-    setScannerState("loading");
-    setError(null);
+  // Handle QR scan result - immediately prompt wallet
+  const handleScan = useCallback(
+    async (data: string) => {
+      console.log("Scanned QR code:", data);
+      setScannedData(data);
+      setScannerState("loading");
+      setError(null);
 
-    try {
-      const parsed = parseEIP681(data);
+      try {
+        const parsed = parseEIP681(data);
 
-      if (!parsed) {
-        throw new Error(
-          "Invalid QR code format. Expected an Ethereum payment URI (EIP-681)."
+        if (!parsed) {
+          throw new Error(
+            "Invalid QR code format. Expected an Ethereum payment URI (EIP-681)."
+          );
+        }
+
+        const validation = validatePayment(parsed);
+        if (!validation.valid) {
+          throw new Error(validation.errors.join(". "));
+        }
+
+        setParsedPayment(parsed);
+
+        const resolved = await resolvePaymentAmount(parsed, {
+          maxDiscrepancy: 0.05,
+          throwOnPriceFailure: false,
+        });
+
+        setResolvedPayment(resolved);
+
+        // Skip confirmation screen - prompt wallet immediately
+        if (isConnected) {
+          setScannerState("confirming");
+
+          const toAddress = getAddress(
+            resolved.isERC20 ? resolved.tokenAddress! : resolved.to
+          );
+
+          let calls: Array<{
+            to: `0x${string}`;
+            value?: bigint;
+            data?: `0x${string}`;
+          }>;
+
+          if (!resolved.isERC20) {
+            calls = [
+              {
+                to: toAddress,
+                value: BigInt(resolved.resolvedValue),
+              },
+            ];
+          } else {
+            const recipientAddress = getAddress(resolved.recipient!);
+            const callData = encodeFunctionData({
+              abi: parseAbi([
+                "function transfer(address to, uint256 amount) returns (bool)",
+              ]),
+              functionName: "transfer",
+              args: [recipientAddress, BigInt(resolved.resolvedValue)],
+            });
+
+            calls = [
+              {
+                to: toAddress,
+                data: callData,
+              },
+            ];
+          }
+
+          sendCalls(
+            { calls },
+            {
+              onSuccess: (result) => {
+                console.log("Calls submitted:", result);
+                const id = typeof result === "string" ? result : result.id;
+                setCallsId(id);
+                setScannerState("success");
+              },
+              onError: (err) => {
+                console.error("Transaction failed:", err);
+                const friendlyError = parseWalletError(err);
+                setError(friendlyError);
+                setScannerState("error");
+              },
+            }
+          );
+        } else {
+          // Not connected - show preview to prompt connection
+          setScannerState("preview");
+        }
+      } catch (err) {
+        console.error("Failed to process QR code:", err);
+        setError(
+          err instanceof Error ? err.message : "Failed to process QR code"
         );
+        setScannerState("error");
       }
-
-      const validation = validatePayment(parsed);
-      if (!validation.valid) {
-        throw new Error(validation.errors.join(". "));
-      }
-
-      setParsedPayment(parsed);
-
-      const resolved = await resolvePaymentAmount(parsed, {
-        maxDiscrepancy: 0.05,
-        throwOnPriceFailure: false,
-      });
-
-      setResolvedPayment(resolved);
-      setScannerState("preview");
-    } catch (err) {
-      console.error("Failed to process QR code:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to process QR code"
-      );
-      setScannerState("error");
-    }
-  }, []);
+    },
+    [isConnected, sendCalls]
+  );
 
   // Handle scan error
   const handleScanError = useCallback((errorMsg: string) => {
