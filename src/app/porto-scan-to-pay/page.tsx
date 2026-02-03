@@ -415,8 +415,13 @@ export default function PortoWalletPage() {
         ];
       }
 
+      console.log("Sending calls on chain:", resolvedPayment.chainId);
+
       sendCalls(
-        { calls },
+        {
+          calls,
+          chainId: resolvedPayment.chainId,
+        },
         {
           onSuccess: (result) => {
             console.log("Calls submitted:", result);
