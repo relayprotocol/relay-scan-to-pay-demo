@@ -17,6 +17,7 @@ import {
   useSendCalls,
   useReadContract,
   useConfig,
+  useSwitchChain,
 } from "wagmi";
 import { getPublicClient } from "wagmi/actions";
 import { getAddress, encodeFunctionData, parseAbi, formatUnits } from "viem";
@@ -153,10 +154,11 @@ export default function PortoWalletPage() {
   const [transactions] = useState<Transaction[]>([]);
 
   // Wagmi hooks for Porto
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId: currentChainId } = useAccount();
   const { connect, connectors, isPending: isConnecting } = useConnect();
   const { disconnect } = useDisconnect();
   const config = useConfig();
+  const { switchChainAsync } = useSwitchChain();
 
   // Use ERC-5792 sendCalls for Porto compatibility
   const { mutate: sendCalls, isPending: isSending } = useSendCalls();
@@ -197,7 +199,7 @@ export default function PortoWalletPage() {
     }
   }, [address]);
 
-  // Handle QR scan result - check balance and prompt wallet immediately
+  // Handle QR scan result - parse, check balance, and prompt wallet
   const handleScan = useCallback(
     async (data: string) => {
       console.log("Scanned QR code:", data);
@@ -206,6 +208,7 @@ export default function PortoWalletPage() {
       setError(null);
 
       try {
+        // Parse EIP-681 URI
         const parsed = parseEIP681(data);
 
         if (!parsed) {
@@ -214,139 +217,116 @@ export default function PortoWalletPage() {
           );
         }
 
-        const validation = validatePayment(parsed);
-        if (!validation.valid) {
-          throw new Error(validation.errors.join(". "));
-        }
-
+        console.log("Parsed payment:", parsed);
         setParsedPayment(parsed);
 
-        const resolved = await resolvePaymentAmount(parsed, {
-          maxDiscrepancy: 0.05,
-          throwOnPriceFailure: false,
-        });
+        // For ERC-20 transfers, we need: tokenAddress, recipient, amount
+        if (!parsed.isERC20) {
+          throw new Error("Only ERC-20 token transfers are supported.");
+        }
 
+        if (!parsed.tokenAddress || !parsed.recipient || !parsed.value) {
+          throw new Error(
+            "Invalid payment: missing token address, recipient, or amount."
+          );
+        }
+
+        const tokenAddress = getAddress(parsed.tokenAddress);
+        const recipientAddress = getAddress(parsed.recipient);
+        const amount = BigInt(parsed.value);
+
+        // Create resolved payment for display
+        const resolved: ResolvedPayment = {
+          ...parsed,
+          resolvedValue: parsed.value,
+          resolvedUsdAmount: parsed.usdAmount || "0",
+          tokenPrice: 1,
+          priceCalculated: false,
+          decimals: 6, // USDC
+          symbol: "USDC",
+        };
         setResolvedPayment(resolved);
 
-        // If connected, check balance and prompt wallet immediately
-        if (isConnected && address) {
-          // Get public client for the payment's chain
-          const publicClient = getPublicClient(config, {
-            chainId: resolved.chainId,
+        // If not connected, show preview to prompt connection
+        if (!isConnected || !address) {
+          setScannerState("preview");
+          return;
+        }
+
+        // Check balance before prompting wallet
+        const publicClient = getPublicClient(config, {
+          chainId: parsed.chainId,
+        });
+
+        if (publicClient) {
+          const balance = await publicClient.readContract({
+            address: tokenAddress,
+            abi: ERC20_ABI,
+            functionName: "balanceOf",
+            args: [address],
           });
 
-          if (!publicClient) {
+          console.log("Balance:", balance.toString(), "Required:", amount.toString());
+
+          if (balance < amount) {
+            const balanceFormatted = formatUnits(balance, 6);
+            const requiredFormatted = formatUnits(amount, 6);
             throw new Error(
-              `Unsupported chain: ${CHAIN_NAMES[resolved.chainId] || resolved.chainId}`
+              `Insufficient USDC balance. You have ${balanceFormatted} but need ${requiredFormatted}.`
             );
           }
+        }
 
-          const requiredAmount = BigInt(resolved.resolvedValue);
+        // Balance OK - switch chain if needed
+        if (currentChainId !== parsed.chainId) {
+          console.log(`Switching chain from ${currentChainId} to ${parsed.chainId}`);
+          await switchChainAsync({ chainId: parsed.chainId });
+        }
 
-          // Check balance before attempting transaction
-          if (resolved.isERC20 && resolved.tokenAddress) {
-            const tokenAddress = getAddress(resolved.tokenAddress);
-            const balance = await publicClient.readContract({
-              address: tokenAddress,
-              abi: ERC20_ABI,
-              functionName: "balanceOf",
-              args: [address],
-            });
+        // Prompt wallet
+        setScannerState("confirming");
 
-            console.log(
-              "Token balance:",
-              balance.toString(),
-              "Required:",
-              requiredAmount.toString()
-            );
+        console.log("Sending ERC-20 transfer:", {
+          token: tokenAddress,
+          to: recipientAddress,
+          amount: amount.toString(),
+          chainId: parsed.chainId,
+        });
 
-            if (balance < requiredAmount) {
-              const symbol = resolved.symbol || "tokens";
-              const decimals = resolved.decimals || 18;
-              const balanceFormatted = formatUnits(balance, decimals);
-              const requiredFormatted = formatUnits(requiredAmount, decimals);
-              throw new Error(
-                `Insufficient balance. You have ${balanceFormatted} ${symbol} but need ${requiredFormatted} ${symbol}.`
-              );
-            }
-          } else {
-            const balance = await publicClient.getBalance({ address });
+        // Encode ERC-20 transfer call
+        const callData = encodeFunctionData({
+          abi: parseAbi([
+            "function transfer(address to, uint256 amount) returns (bool)",
+          ]),
+          functionName: "transfer",
+          args: [recipientAddress, amount],
+        });
 
-            console.log(
-              "Native balance:",
-              balance.toString(),
-              "Required:",
-              requiredAmount.toString()
-            );
-
-            if (balance < requiredAmount) {
-              const balanceFormatted = formatUnits(balance, 18);
-              const requiredFormatted = formatUnits(requiredAmount, 18);
-              throw new Error(
-                `Insufficient balance. You have ${balanceFormatted} ETH but need ${requiredFormatted} ETH.`
-              );
-            }
-          }
-
-          // Balance is sufficient - prompt wallet immediately
-          setScannerState("confirming");
-
-          const toAddress = getAddress(
-            resolved.isERC20 ? resolved.tokenAddress! : resolved.to
-          );
-
-          let calls: Array<{
-            to: `0x${string}`;
-            value?: bigint;
-            data?: `0x${string}`;
-          }>;
-
-          if (!resolved.isERC20) {
-            calls = [
+        // Send via ERC-5792 wallet_sendCalls
+        sendCalls(
+          {
+            calls: [
               {
-                to: toAddress,
-                value: requiredAmount,
-              },
-            ];
-          } else {
-            const recipientAddress = getAddress(resolved.recipient!);
-            const callData = encodeFunctionData({
-              abi: parseAbi([
-                "function transfer(address to, uint256 amount) returns (bool)",
-              ]),
-              functionName: "transfer",
-              args: [recipientAddress, requiredAmount],
-            });
-
-            calls = [
-              {
-                to: toAddress,
+                to: tokenAddress,
                 data: callData,
               },
-            ];
+            ],
+          },
+          {
+            onSuccess: (result) => {
+              console.log("Transaction submitted:", result);
+              const id = typeof result === "string" ? result : result.id;
+              setCallsId(id);
+              setScannerState("success");
+            },
+            onError: (err) => {
+              console.error("Transaction failed:", err);
+              const friendlyError = parseWalletError(err);
+              setError(friendlyError);
+              setScannerState("error");
+            },
           }
-
-          sendCalls(
-            { calls },
-            {
-              onSuccess: (result) => {
-                console.log("Calls submitted:", result);
-                const id = typeof result === "string" ? result : result.id;
-                setCallsId(id);
-                setScannerState("success");
-              },
-              onError: (err) => {
-                console.error("Transaction failed:", err);
-                const friendlyError = parseWalletError(err);
-                setError(friendlyError);
-                setScannerState("error");
-              },
-            }
-          );
-        } else {
-          // Not connected - show preview to prompt connection
-          setScannerState("preview");
-        }
+        );
       } catch (err) {
         console.error("Failed to process QR code:", err);
         setError(
@@ -355,7 +335,7 @@ export default function PortoWalletPage() {
         setScannerState("error");
       }
     },
-    [isConnected, address, config, sendCalls]
+    [isConnected, address, config, currentChainId, switchChainAsync, sendCalls]
   );
 
   // Handle scan error

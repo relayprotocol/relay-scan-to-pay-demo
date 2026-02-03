@@ -12,7 +12,7 @@ import { WagmiProvider, createConfig, http } from "wagmi";
 import { mainnet, base, optimism, arbitrum, polygon } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { porto } from "porto/wagmi";
-import { Mode } from "porto";
+import { Mode, Dialog } from "porto";
 
 // Create a separate QueryClient for Porto pages
 const queryClient = new QueryClient({
@@ -61,6 +61,7 @@ const portoConfig = createConfig({
   connectors: [
     porto({
       mode: Mode.dialog({
+        renderer: Dialog.popup(),
         theme: portoTheme,
       }),
     }),
@@ -82,9 +83,7 @@ interface PortoLayoutProps {
 export default function PortoLayout({ children }: PortoLayoutProps) {
   return (
     <WagmiProvider config={portoConfig}>
-      <QueryClientProvider client={queryClient}>
-        {children}
-      </QueryClientProvider>
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
     </WagmiProvider>
   );
 }
