@@ -53,9 +53,18 @@ export default function Home() {
               className="text-primary hover:underline font-medium"
             >
               Relay
+            </a>{" "}
+            and{" "}
+            <a
+              href="https://porto.sh"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline font-medium"
+            >
+              Porto
             </a>
-            . Merchants generate QR codes specifying their desired payment
-            intent, and customers can pay with any asset from any chain.
+            . Merchants generate payment links, customers scan QR codes, and pay
+            seamlessly with their Porto wallet.
           </p>
         </div>
 
@@ -67,28 +76,30 @@ export default function Home() {
               <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold mb-3">
                 1
               </div>
-              <h3 className="font-medium mb-1">Merchant generates QR</h3>
+              <h3 className="font-medium mb-1">Merchant generates link</h3>
               <p className="text-sm text-muted-foreground">
-                Specify the token, amount, and recipient address for the
-                payment.
+                Create a payment link specifying the amount and recipient
+                address for USDC.
               </p>
             </div>
             <div className="p-4 border rounded-lg bg-card">
               <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold mb-3">
                 2
               </div>
-              <h3 className="font-medium mb-1">Customer scans</h3>
+              <h3 className="font-medium mb-1">Link generates QR code</h3>
               <p className="text-sm text-muted-foreground">
-                Customer scans the QR code and connects their wallet.
+                The checkout page displays a deposit address and QR code for the
+                transaction.
               </p>
             </div>
             <div className="p-4 border rounded-lg bg-card">
               <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold mb-3">
                 3
               </div>
-              <h3 className="font-medium mb-1">Pay with any asset</h3>
+              <h3 className="font-medium mb-1">Customer pays with Porto</h3>
               <p className="text-sm text-muted-foreground">
-                Relay handles cross-chain swaps so customers pay with any token.
+                Customer scans the QR code with their Porto wallet and completes
+                the payment.
               </p>
             </div>
           </div>
@@ -96,17 +107,18 @@ export default function Home() {
 
         {/* Demo Section */}
         <div className="grid gap-8 md:grid-cols-2 mb-12">
-          {/* Generate QR */}
+          {/* Generate Payment Link */}
           <div className="p-6 border rounded-xl bg-card">
             <h3 className="font-semibold text-lg mb-2">Merchant View</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Generate a payment QR code as if you were a merchant.
+              Generate a payment link as a merchant. Share it with customers to
+              receive payments.
             </p>
             <Link
-              href="/generate-qr-code"
+              href="/generate-payment-link"
               className="inline-flex items-center justify-center w-full py-3 px-4 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
             >
-              Generate QR Code
+              Generate Payment Link
             </Link>
           </div>
 
@@ -136,36 +148,21 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Porto Scan-to-Pay Section */}
+        {/* Porto Scanner Section */}
         <div className="mb-12 p-6 border rounded-xl bg-gradient-to-br from-primary/5 to-primary/10">
           <div className="flex items-center gap-2 mb-2">
-            <span className="px-2 py-0.5 text-xs font-medium bg-primary/20 text-primary rounded-full">
-              New
-            </span>
-            <h3 className="font-semibold text-lg">Porto Scan-to-Pay</h3>
+            <h3 className="font-semibold text-lg">Porto Wallet Scanner</h3>
           </div>
           <p className="text-sm text-muted-foreground mb-4">
-            Scan any EIP-681 payment QR code with proper parsing, USD display, and
-            seamless payment flow using{" "}
-            <a
-              href="https://porto.sh"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              Porto
-            </a>{" "}
-            wallet. Fixes issues found in MetaMask and other wallets.
+            Use the Porto wallet to scan payment QR codes. Supports EIP-681
+            format with proper parsing and seamless transaction flow.
           </p>
           <div className="flex flex-wrap gap-2 mb-4">
             <span className="px-2 py-1 text-xs bg-muted rounded-md">
               EIP-681 Support
             </span>
             <span className="px-2 py-1 text-xs bg-muted rounded-md">
-              USD Amounts
-            </span>
-            <span className="px-2 py-1 text-xs bg-muted rounded-md">
-              ERC-20 Transfers
+              USDC Payments
             </span>
             <span className="px-2 py-1 text-xs bg-muted rounded-md">
               Multi-chain

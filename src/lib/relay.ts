@@ -33,10 +33,10 @@ export type CurrenciesV2Response =
 export type Currency = CurrenciesV2Response[number];
 
 export type QuoteRequestBody = NonNullable<
-  paths["/quote"]["post"]["requestBody"]
+  paths["/quote/v2"]["post"]["requestBody"]
 >["content"]["application/json"];
 export type QuoteResponse =
-  paths["/quote"]["post"]["responses"]["200"]["content"]["application/json"];
+  paths["/quote/v2"]["post"]["responses"]["200"]["content"]["application/json"];
 
 // Default fallback chains
 export const fallbackChains = [base, mainnet, optimism, arbitrum, polygon];
@@ -121,11 +121,13 @@ export async function fetchCurrencies(
 
 export async function fetchQuote(
   params: QuoteRequestBody,
+  cacheSeconds?: number,
 ): Promise<QuoteResponse> {
-  const response = await fetch(`${MAINNET_RELAY_API}/quote`, {
+  const response = await fetch(`${MAINNET_RELAY_API}/quote/v2`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
+    ...(cacheSeconds !== undefined && { next: { revalidate: cacheSeconds } }),
   });
 
   if (!response.ok) {

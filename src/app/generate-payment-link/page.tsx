@@ -1,45 +1,35 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { QRCodeSVG } from "qrcode.react";
 import Link from "next/link";
 import { parseUnits } from "viem";
 import { useRelayChains } from "@/providers";
 import {
   TokenSelectorModal,
   SelectedTokenButton,
-  AddressDisplay,
 } from "@/components/common";
 
 import type { Currency } from "@/lib/relay";
 
-// Payment intent data structure - encoded in QR code
+// Payment intent data structure - encoded in payment link
 interface PaymentIntent {
   destinationChainId: number;
   destinationCurrency: string;
   amount: string;
   recipient: string;
-  merchantId: string;
   merchantName: string;
-  orderId: string;
   description?: string;
-  tradeType: "EXACT_OUTPUT";
-  createdAt: string;
 }
 
-function generateOrderId() {
-  return `PAY-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
-}
-
-export default function GenerateQRCodePage() {
+export default function GeneratePaymentLinkPage() {
   const { chains } = useRelayChains();
 
   // Form state
   const [merchantName, setMerchantName] = useState("Demo Coffee Shop");
-  const [merchantId] = useState("merchant_001");
   const [description, setDescription] = useState("Order payment");
   const [recipientAddress, setRecipientAddress] = useState("");
   const [amount, setAmount] = useState("");
+  const [copied, setCopied] = useState(false);
 
   // Token selection
   const [selectedChainId, setSelectedChainId] = useState<number | null>(null);
@@ -70,27 +60,28 @@ export default function GenerateQRCodePage() {
       destinationCurrency: selectedCurrency.address || "",
       amount: amountInSmallestUnit,
       recipient: recipientAddress,
-      merchantId,
       merchantName,
-      orderId: generateOrderId(),
       description,
-      tradeType: "EXACT_OUTPUT" as const,
-      createdAt: new Date().toISOString(),
     };
   }, [
     selectedChainId,
     selectedCurrency,
     amountInSmallestUnit,
     recipientAddress,
-    merchantId,
     merchantName,
     description,
   ]);
 
-  // Create the checkout URL
+  const handleTokenSelect = (chainId: number, currency: Currency) => {
+    setSelectedChainId(chainId);
+    setSelectedCurrency(currency);
+    setShowTokenSelector(false);
+  };
+
+  // Create the pay URL
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-  const checkoutUrl = paymentIntent
-    ? `${baseUrl}/checkout?intent=${encodeURIComponent(JSON.stringify(paymentIntent))}`
+  const payUrl = paymentIntent
+    ? `${baseUrl}/pay?intent=${encodeURIComponent(JSON.stringify(paymentIntent))}`
     : "";
 
   // Validation
@@ -103,10 +94,12 @@ export default function GenerateQRCodePage() {
     selectedCurrency &&
     paymentIntent;
 
-  const handleTokenSelect = (chainId: number, currency: Currency) => {
-    setSelectedChainId(chainId);
-    setSelectedCurrency(currency);
-    setShowTokenSelector(false);
+  const handleCopyLink = async () => {
+    if (payUrl) {
+      await navigator.clipboard.writeText(payUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
   };
 
   return (
@@ -119,12 +112,10 @@ export default function GenerateQRCodePage() {
           ← Back to Home
         </Link>
 
-        <h1 className="text-3xl font-bold mt-4 mb-2">
-          Generate Payment QR Code
-        </h1>
+        <h1 className="text-3xl font-bold mt-4 mb-2">Generate Payment Link</h1>
         <p className="text-muted-foreground mb-8">
-          Configure the Relay payment parameters. The QR code will direct
-          customers to pay using any asset.
+          Configure the payment parameters. The generated link will create a
+          checkout page with a deposit address and QR code for customers to pay.
         </p>
 
         <div className="grid md:grid-cols-2 gap-8">
@@ -224,87 +215,122 @@ export default function GenerateQRCodePage() {
                 />
               </div>
             </div>
-
-            {/* Summary */}
-            {isValid && (
-              <div className="border-t pt-4 space-y-2 bg-muted/50 p-4 rounded-lg">
-                <h3 className="font-medium">Payment Summary</h3>
-                <div className="text-sm space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Amount</span>
-                    <span className="font-medium">
-                      {amount} {selectedCurrency?.symbol}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Chain</span>
-                    <span>
-                      {selectedChain?.displayName || selectedChain?.name}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted-foreground">Recipient</span>
-                    <AddressDisplay
-                      address={recipientAddress}
-                      className="text-xs"
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* QR Code Display */}
+          {/* Payment Link Display */}
           <div className="flex flex-col items-center justify-start p-8 border rounded-lg bg-card">
             {isValid && paymentIntent ? (
-              <>
-                <div className="bg-white p-4 rounded-lg shadow-sm">
-                  <QRCodeSVG
-                    value={checkoutUrl}
-                    size={256}
-                    level="M"
-                    includeMargin
-                  />
-                </div>
-                <p className="mt-4 text-lg font-semibold">
-                  {amount} {selectedCurrency?.symbol}
-                </p>
-                <p className="text-sm text-muted-foreground">{merchantName}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  on {selectedChain?.displayName || selectedChain?.name}
-                </p>
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center h-64 text-center">
-                <div className="w-48 h-48 border-2 border-dashed border-muted-foreground/30 rounded-lg flex items-center justify-center">
-                  <p className="text-muted-foreground text-sm px-4">
-                    Fill in all required fields to generate QR code
+              <div className="w-full space-y-6">
+                <div className="text-center">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
+                    <svg
+                      className="w-8 h-8 text-primary"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                      />
+                    </svg>
+                  </div>
+                  <p className="text-lg font-semibold">
+                    {amount} {selectedCurrency?.symbol}
+                  </p>
+                  <p className="text-sm text-muted-foreground">{merchantName}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    on {selectedChain?.displayName || selectedChain?.name}
                   </p>
                 </div>
+
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium">
+                    Payment Link
+                  </label>
+                  <div className="p-3 bg-muted rounded-md">
+                    <p className="text-xs font-mono break-all text-muted-foreground">
+                      {payUrl}
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleCopyLink}
+                    className="w-full py-3 px-4 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                  >
+                    {copied ? (
+                      <>
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <svg
+                          className="w-5 h-5"
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                          />
+                        </svg>
+                        Copy Link
+                      </>
+                    )}
+                  </button>
+                  <a
+                    href={payUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3 px-4 border border-input font-medium rounded-lg hover:bg-muted transition-colors flex items-center justify-center gap-2"
+                  >
+                    Open Checkout Page
+                  </a>
+                </div>
+
+                <p className="text-xs text-center text-muted-foreground">
+                  Share this link with your customer. They will see a deposit
+                  address and QR code to complete the payment.
+                </p>
               </div>
-            )}
-
-            {/* Debug info */}
-            {paymentIntent && (
-              <details className="mt-6 text-xs w-full overflow-hidden">
-                <summary className="cursor-pointer text-muted-foreground">
-                  View payment intent (debug)
-                </summary>
-                <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto max-h-48 whitespace-pre-wrap break-all">
-                  {JSON.stringify(paymentIntent, null, 2)}
-                </pre>
-              </details>
-            )}
-
-            {isValid && (
-              <details className="mt-2 text-xs w-full overflow-hidden">
-                <summary className="cursor-pointer text-muted-foreground">
-                  View checkout URL
-                </summary>
-                <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto max-h-24 whitespace-pre-wrap break-all">
-                  {checkoutUrl}
-                </pre>
-              </details>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-64 text-center">
+                <div className="w-16 h-16 mb-4 rounded-full bg-muted flex items-center justify-center">
+                  <svg
+                    className="w-8 h-8 text-muted-foreground"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"
+                    />
+                  </svg>
+                </div>
+                <p className="text-muted-foreground text-sm px-4">
+                  Fill in all required fields to generate a payment link
+                </p>
+              </div>
             )}
           </div>
         </div>

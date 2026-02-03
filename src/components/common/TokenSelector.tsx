@@ -639,16 +639,16 @@ export function SelectedTokenButton({
   return (
     <button
       onClick={onClick}
-      className="w-full p-4 border border-input rounded-xl hover:border-primary hover:bg-muted/30 transition-colors flex items-center gap-4"
+      className="w-full p-3 border border-input rounded-xl hover:border-primary hover:bg-muted/30 transition-colors flex items-center gap-3"
     >
       <TokenIcon
         tokenLogoURI={currency.metadata?.logoURI}
         tokenSymbol={currency.symbol}
         chainIconUrl={chain?.id ? getChainSquaredIconUrl(chain.id) : undefined}
-        size="lg"
+        size="md"
       />
       <div className="flex-1 text-left min-w-0">
-        <div className="font-semibold text-lg">{currency.symbol}</div>
+        <div className="font-semibold">{currency.symbol}</div>
         <div className="text-sm text-muted-foreground">
           on {chain?.displayName || chain?.name}
         </div>

@@ -34,6 +34,16 @@ const sizeConfig = {
   },
 }
 
+function isValidUrl(url: string | null | undefined): url is string {
+  if (!url) return false;
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function TokenIcon({
   tokenLogoURI,
   tokenSymbol,
@@ -43,12 +53,14 @@ export function TokenIcon({
   className,
 }: TokenIconProps) {
   const config = sizeConfig[size]
+  const validTokenLogoURI = isValidUrl(tokenLogoURI) ? tokenLogoURI : null;
+  const validChainIconUrl = isValidUrl(chainIconUrl) ? chainIconUrl : null;
 
   return (
     <div className={cn("relative flex-shrink-0", className)}>
-      {tokenLogoURI ? (
+      {validTokenLogoURI ? (
         <Image
-          src={tokenLogoURI}
+          src={validTokenLogoURI}
           alt={tokenSymbol || ""}
           width={config.token}
           height={config.token}
@@ -65,7 +77,7 @@ export function TokenIcon({
           {(tokenSymbol || "?").slice(0, 2)}
         </div>
       )}
-      {showChainBadge && chainIconUrl && (
+      {showChainBadge && validChainIconUrl && (
         <div
           className={cn(
             "absolute -bottom-0.5 -right-0.5 bg-background rounded-sm border border-border flex items-center justify-center",
@@ -73,7 +85,7 @@ export function TokenIcon({
           )}
         >
           <Image
-            src={chainIconUrl}
+            src={validChainIconUrl}
             alt=""
             width={config.badge}
             height={config.badge}
