@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { QRCodeSVG } from "qrcode.react";
 import { formatUnits } from "viem";
 import { AddressDisplay } from "@/components/common";
+import { PaymentStatusTracker } from "@/components/pay";
 import { fetchQuote, type QuoteResponse } from "@/lib/relay";
 import {
   Accordion,
@@ -151,9 +151,13 @@ async function PayContent({ searchParams }: PayPageProps) {
   }
 
   // Extract deposit address from quote
+  // When useDepositAddress=true, the address is at steps[].depositAddress
   const depositStep = quote.steps?.[0];
-  const depositAddress = (depositStep?.items?.[0]?.data as { to?: string })?.to;
+  const depositAddress = (depositStep as { depositAddress?: string })
+    ?.depositAddress;
   const requestId = depositStep?.requestId;
+
+  console.log("Deposit address:", depositAddress);
 
   // Validate required quote data
   const currencyIn = quote.details?.currencyIn;
@@ -182,13 +186,21 @@ async function PayContent({ searchParams }: PayPageProps) {
     );
   }
 
-  // Get amounts
-  const amountToSend = currencyIn.amount;
+  // Get amounts with 15bps buffer for deposit address flow
+  // (exact output not fully supported with deposit addresses)
+  const BUFFER_BPS = 15; // 15 basis points = 0.15%
+  const baseAmount = BigInt(currencyIn.amount);
+  const bufferAmount = (baseAmount * BigInt(BUFFER_BPS)) / BigInt(10000);
+  const amountToSendWithBuffer = baseAmount + bufferAmount;
+  const amountToSend = amountToSendWithBuffer.toString();
   const amountToSendFormatted = formatUnits(
-    BigInt(amountToSend),
+    amountToSendWithBuffer,
     ARBITRUM_USDC.decimals,
   );
-  const usdAmount = currencyIn.amountUsd ?? "0";
+  // USD amount also needs buffer
+  const baseUsdAmount = parseFloat(currencyIn.amountUsd ?? "0");
+  const usdAmountWithBuffer = baseUsdAmount * (1 + BUFFER_BPS / 10000);
+  const usdAmount = usdAmountWithBuffer.toFixed(2);
 
   // Amount merchant receives
   const amountOut = currencyOut.amount;
@@ -200,6 +212,7 @@ async function PayContent({ searchParams }: PayPageProps) {
 
   // Generate EIP-681 URI
   const eip681Uri = generateEIP681Uri(depositAddress, amountToSend, usdAmount);
+  console.log("EIP-681 URI:", eip681Uri);
 
   // Calculate total fees
   const totalFeesUsd =
@@ -207,6 +220,25 @@ async function PayContent({ searchParams }: PayPageProps) {
     parseFloat(quote.fees?.relayer?.amountUsd || "0") +
     parseFloat(quote.fees?.relayerGas?.amountUsd || "0") +
     parseFloat(quote.fees?.relayerService?.amountUsd || "0");
+
+  // Ensure we have a requestId for tracking
+  if (!requestId) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center p-8">
+        <div className="text-center space-y-4">
+          <h1 className="text-2xl font-bold text-destructive">
+            Tracking Unavailable
+          </h1>
+          <p className="text-muted-foreground">
+            Could not get a request ID for this payment.
+          </p>
+          <Link href="/" className="text-primary hover:underline">
+            Go back home →
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen p-8">
@@ -236,16 +268,17 @@ async function PayContent({ searchParams }: PayPageProps) {
           </p>
         </div>
 
-        {/* QR Code */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="bg-white p-4 rounded-xl shadow-sm border">
-            <QRCodeSVG value={eip681Uri} size={200} level="M" />
-          </div>
-          <p className="text-sm font-medium mt-4">Scan with wallet</p>
-          <p className="text-xs text-muted-foreground mt-2">
-            Send {amountToSendFormatted} {ARBITRUM_USDC.symbol} on{" "}
-            {ARBITRUM_USDC.chainName}
-          </p>
+        {/* Payment Status Tracker with QR Code */}
+        <div className="mb-8">
+          <PaymentStatusTracker
+            requestId={requestId}
+            eip681Uri={eip681Uri}
+            merchantName={paymentIntent.merchantName}
+            usdAmount={usdAmount}
+            amountFormatted={amountToSendFormatted}
+            tokenSymbol={ARBITRUM_USDC.symbol}
+            chainName={ARBITRUM_USDC.chainName}
+          />
         </div>
 
         {/* Payment Details Accordion */}
@@ -265,7 +298,7 @@ async function PayContent({ searchParams }: PayPageProps) {
                   <span>{ARBITRUM_USDC.chainName}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">You Send</span>
+                  <span className="text-muted-foreground">Customer Sends</span>
                   <span>
                     {amountToSendFormatted} {ARBITRUM_USDC.symbol}
                   </span>
@@ -292,20 +325,6 @@ async function PayContent({ searchParams }: PayPageProps) {
             </AccordionContent>
           </AccordionItem>
         </Accordion>
-
-        {/* Track Payment Link */}
-        {requestId && (
-          <div className="text-center mt-6">
-            <a
-              href={`https://relay.link/transaction/${requestId}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:text-primary"
-            >
-              Track payment status →
-            </a>
-          </div>
-        )}
       </div>
     </main>
   );

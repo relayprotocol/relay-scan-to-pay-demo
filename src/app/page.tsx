@@ -136,14 +136,14 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Porto Scanner Section */}
+        {/* Porto Wallet Section */}
         <div className="mb-12 p-6 border rounded-xl bg-gradient-to-br from-primary/5 to-primary/10">
           <div className="flex items-center gap-2 mb-2">
-            <h3 className="font-semibold text-lg">Porto Wallet Scanner</h3>
+            <h3 className="font-semibold text-lg">Porto Wallet</h3>
           </div>
           <p className="text-sm text-muted-foreground mb-4">
-            Use the Porto wallet to scan payment QR codes. Supports EIP-681
-            format with proper parsing and seamless transaction flow.
+            Porto Wallet is used for demo purposes to showcase the QR
+            scan-to-pay feature and how wallets can interact with Relay.
           </p>
           <div className="flex flex-wrap gap-2 mb-4">
             <span className="px-2 py-1 text-xs bg-muted rounded-md">
@@ -157,10 +157,10 @@ export default function Home() {
             </span>
           </div>
           <Link
-            href="/porto-scan-to-pay"
+            href="/porto-wallet"
             className="inline-flex items-center justify-center w-full sm:w-auto py-3 px-6 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
           >
-            Open Scanner
+            Open Wallet
           </Link>
         </div>
 

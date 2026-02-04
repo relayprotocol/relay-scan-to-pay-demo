@@ -118,3 +118,72 @@ export interface ChainConfig {
     decimals: number;
   };
 }
+
+/**
+ * Transaction record for display
+ */
+export interface Transaction {
+  id: string;
+  merchant: string;
+  date: string;
+  amount: string;
+  amountUsd: string;
+}
+
+/**
+ * Page view state for Porto wallet
+ */
+export type PageView = "home" | "scanner";
+
+/**
+ * Scanner state machine states
+ */
+export type ScannerState =
+  | "scanning"
+  | "loading"
+  | "preview"
+  | "connecting"
+  | "confirming"
+  | "pending"  // Transaction submitted, waiting for confirmation
+  | "success"
+  | "error";
+
+/**
+ * Payment currency configuration for currency selection
+ */
+export interface PaymentCurrency {
+  /** Token contract address */
+  address: `0x${string}`;
+  /** Token symbol (e.g., "USDC") */
+  symbol: string;
+  /** Token decimals */
+  decimals: number;
+  /** Chain ID */
+  chainId: number;
+  /** Chain name for display */
+  chainName: string;
+  /** User's balance in this token (formatted) */
+  balance?: string;
+  /** User's balance in wei */
+  balanceWei?: bigint;
+  /** Whether this is a stablecoin */
+  isStablecoin: boolean;
+  /** Token logo URI from Relay API */
+  logoURI?: string;
+  /** Token name from Relay API */
+  name?: string;
+}
+
+/**
+ * Payment flow state for managing currency selection
+ */
+export interface PaymentFlowState {
+  /** Original currency from QR code */
+  originalCurrency: PaymentCurrency | null;
+  /** Currently selected currency for payment */
+  selectedCurrency: PaymentCurrency | null;
+  /** Calculated amount in selected currency */
+  calculatedAmount: string;
+  /** Whether the user has sufficient balance */
+  hasSufficientBalance: boolean;
+}

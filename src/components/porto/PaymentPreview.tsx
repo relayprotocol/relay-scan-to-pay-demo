@@ -3,30 +3,18 @@
 /**
  * Payment Preview Component
  *
- * Displays parsed EIP-681 payment data with USD conversion.
- * Shows all transaction details before user confirms.
+ * Coinbase Pay-inspired design for payment confirmation.
+ * Shows amount, payment method, and transaction details.
  */
 
 import { useMemo } from "react";
-import { AlertTriangle, ArrowRight, ExternalLink, Loader2 } from "lucide-react";
+import Image from "next/image";
+import { AlertTriangle, ChevronRight, Loader2, Info, Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, truncateAddress, formatUsd } from "@/lib/utils";
-import { formatWeiToDisplay } from "@/lib/porto";
-import type { ResolvedPayment } from "@/lib/porto";
-
-// Chain name lookup
-const CHAIN_NAMES: Record<number, string> = {
-  1: "Ethereum",
-  10: "Optimism",
-  137: "Polygon",
-  8453: "Base",
-  42161: "Arbitrum",
-  43114: "Avalanche",
-  56: "BNB Chain",
-  // Testnets
-  11155111: "Sepolia",
-  84532: "Base Sepolia",
-};
+import { formatWeiToDisplay, CHAIN_NAMES } from "@/lib/porto";
+import { getChainSquaredIconUrl } from "@/lib/relay";
+import type { ResolvedPayment, PaymentCurrency } from "@/lib/porto";
 
 interface PaymentPreviewProps {
   payment: ResolvedPayment;
@@ -34,6 +22,8 @@ interface PaymentPreviewProps {
   onCancel: () => void;
   isLoading?: boolean;
   className?: string;
+  selectedCurrency?: PaymentCurrency | null;
+  onChangeCurrency?: () => void;
 }
 
 export function PaymentPreview({
@@ -42,6 +32,8 @@ export function PaymentPreview({
   onCancel,
   isLoading = false,
   className,
+  selectedCurrency,
+  onChangeCurrency,
 }: PaymentPreviewProps) {
   // Format the crypto amount for display
   const cryptoAmount = useMemo(() => {
@@ -51,34 +43,47 @@ export function PaymentPreview({
   // Get chain name
   const chainName = CHAIN_NAMES[payment.chainId] || `Chain ${payment.chainId}`;
 
-  // Get recipient address (for ERC-20 it's the recipient param, otherwise the `to` address)
+  // Get recipient address
   const recipientAddress = payment.isERC20
     ? payment.recipient || payment.to
     : payment.to;
 
+  // Determine display values based on selected currency
+  const displaySymbol = selectedCurrency?.symbol || payment.symbol;
+  const displayChainName = selectedCurrency?.chainName || chainName;
+
+  // Format balance for display
+  const formattedBalance = selectedCurrency?.balance
+    ? parseFloat(selectedCurrency.balance).toLocaleString(undefined, {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })
+    : null;
+
   return (
     <div className={cn("w-full", className)}>
-      {/* Amount Display */}
+      {/* Header with Icon */}
       <div className="text-center mb-6">
-        {/* USD Amount (Primary) */}
-        <div className="text-4xl font-bold text-foreground mb-1">
-          {formatUsd(payment.resolvedUsdAmount)}
+        <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
+          <Coins className="w-8 h-8 text-primary" />
         </div>
+        <h2 className="text-2xl font-bold">
+          Pay {formatUsd(payment.resolvedUsdAmount)}
+        </h2>
+      </div>
 
-        {/* Crypto Amount (Secondary) */}
-        <div className="text-lg text-muted-foreground">
-          {cryptoAmount} {payment.symbol}
-        </div>
-
-        {/* Exchange Rate */}
-        <div className="text-sm text-muted-foreground mt-2">
-          1 {payment.symbol} = {formatUsd(payment.tokenPrice.toString())}
+      {/* Network Badge */}
+      <div className="flex justify-center mb-6">
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-muted rounded-full text-sm">
+          <div className="w-2 h-2 rounded-full bg-green-500" />
+          <span className="text-muted-foreground">Network:</span>
+          <span className="font-medium">{displayChainName}</span>
         </div>
       </div>
 
       {/* Warning Banner */}
       {payment.priceWarning && (
-        <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-lg p-3 mb-6">
+        <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-xl p-3 mb-4">
           <div className="flex items-start gap-2">
             <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
             <p className="text-sm text-yellow-700 dark:text-yellow-300">
@@ -88,90 +93,136 @@ export function PaymentPreview({
         </div>
       )}
 
+      {/* Pay With Section */}
+      <button
+        onClick={onChangeCurrency}
+        disabled={isLoading || !onChangeCurrency}
+        className="w-full p-4 bg-muted/50 hover:bg-muted rounded-xl border border-border transition-colors mb-4 text-left"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            {/* Token Icon with Chain Badge */}
+            <div className="relative flex-shrink-0">
+              {selectedCurrency?.logoURI ? (
+                <Image
+                  src={selectedCurrency.logoURI}
+                  alt={displaySymbol}
+                  width={40}
+                  height={40}
+                  className="rounded-full"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <span className="text-sm font-bold text-primary">
+                    {displaySymbol.slice(0, 2)}
+                  </span>
+                </div>
+              )}
+              {/* Chain badge */}
+              <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-white rounded border border-border flex items-center justify-center">
+                <Image
+                  src={getChainSquaredIconUrl(selectedCurrency?.chainId || payment.chainId)}
+                  alt=""
+                  width={12}
+                  height={12}
+                  className="rounded-sm"
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-medium">Pay with</span>
+                <Info className="w-3.5 h-3.5 text-muted-foreground" />
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {selectedCurrency?.name || displaySymbol} on {displayChainName}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {formattedBalance && (
+              <div className="text-right">
+                <div className="text-sm font-medium">
+                  ${formattedBalance}
+                </div>
+                <div className="text-xs text-muted-foreground">Available</div>
+              </div>
+            )}
+            {onChangeCurrency && (
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            )}
+          </div>
+        </div>
+      </button>
+
       {/* Transaction Details */}
-      <div className="bg-muted/50 rounded-lg p-4 space-y-3 mb-6">
+      <div className="border border-border rounded-xl p-4 space-y-3 mb-4">
+        {/* Amount in crypto */}
+        <div className="flex justify-between items-center">
+          <span className="text-sm text-muted-foreground">Amount</span>
+          <span className="text-sm font-medium">
+            {cryptoAmount} {displaySymbol}
+          </span>
+        </div>
+
         {/* Recipient */}
         <div className="flex justify-between items-center">
           <span className="text-sm text-muted-foreground">To</span>
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-mono">
-              {truncateAddress(recipientAddress, 8, 6)}
-            </span>
-            <a
-              href={`https://etherscan.io/address/${recipientAddress}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <ExternalLink className="w-3 h-3" />
-            </a>
-          </div>
+          <span className="text-sm font-mono">
+            {truncateAddress(recipientAddress, 6, 4)}
+          </span>
         </div>
 
-        {/* Network */}
+        {/* Network Fee (placeholder - could be enhanced with actual gas estimate) */}
         <div className="flex justify-between items-center">
-          <span className="text-sm text-muted-foreground">Network</span>
-          <span className="text-sm">{chainName}</span>
+          <span className="text-sm text-muted-foreground">Network fee</span>
+          <span className="text-sm text-muted-foreground">~$0.01</span>
         </div>
 
-        {/* Token (for ERC-20) */}
-        {payment.isERC20 && payment.tokenAddress && (
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">Token</span>
-            <div className="flex items-center gap-2">
-              <span className="text-sm">{payment.symbol}</span>
-              <span className="text-xs text-muted-foreground font-mono">
-                ({truncateAddress(payment.tokenAddress, 6, 4)})
-              </span>
-            </div>
-          </div>
-        )}
+        {/* Divider */}
+        <div className="border-t border-border" />
 
-        {/* Gas (if specified) */}
-        {payment.gas && (
-          <div className="flex justify-between items-center">
-            <span className="text-sm text-muted-foreground">Gas Limit</span>
-            <span className="text-sm">{payment.gas}</span>
-          </div>
-        )}
-
-        {/* Price source indicator */}
-        <div className="flex justify-between items-center pt-2 border-t border-border">
-          <span className="text-xs text-muted-foreground">Price Source</span>
-          <span className="text-xs text-muted-foreground">
-            {payment.priceCalculated ? "Calculated from current rate" : "Relay API"}
+        {/* Total */}
+        <div className="flex justify-between items-center">
+          <span className="font-medium">Total</span>
+          <span className="font-bold text-lg">
+            {formatUsd(payment.resolvedUsdAmount)}
           </span>
         </div>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex gap-3">
-        <Button
-          variant="outline"
-          onClick={onCancel}
-          disabled={isLoading}
-          className="flex-1"
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={onConfirm}
-          disabled={isLoading}
-          className="flex-1"
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Confirming...
-            </>
-          ) : (
-            <>
-              Pay {formatUsd(payment.resolvedUsdAmount)}
-              <ArrowRight className="w-4 h-4 ml-2" />
-            </>
-          )}
-        </Button>
-      </div>
+      {/* Pay Button */}
+      <Button
+        onClick={onConfirm}
+        disabled={isLoading}
+        className="w-full h-12 text-base font-medium rounded-xl mb-4"
+        size="lg"
+      >
+        {isLoading ? (
+          <>
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            Confirming...
+          </>
+        ) : (
+          "Pay now"
+        )}
+      </Button>
+
+      {/* Security Disclaimer */}
+      <p className="text-xs text-center text-muted-foreground mb-4 px-4">
+        Sending funds is a permanent action. For your security, be sure you trust
+        the merchant listed. Refunds are handled according to the merchant&apos;s
+        refund policy.
+      </p>
+
+      {/* Cancel Link */}
+      <button
+        onClick={onCancel}
+        disabled={isLoading}
+        className="w-full text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+      >
+        Cancel
+      </button>
     </div>
   );
 }

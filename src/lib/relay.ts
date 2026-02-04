@@ -139,3 +139,42 @@ export async function fetchQuote(
 
   return response.json();
 }
+
+// Intent Status API types
+export type IntentStatusValue =
+  | "waiting"   // Awaiting deposit confirmation
+  | "pending"   // Deposit confirmed, awaiting destination submission
+  | "submitted" // Destination transaction submitted
+  | "success"   // Successful fill on destination
+  | "delayed"   // Processing continues on destination chain
+  | "refund"    // Refund in progress
+  | "refunded"  // Successfully refunded
+  | "failure";  // Unsuccessful fill
+
+export interface IntentStatusResponse {
+  status: IntentStatusValue;
+  details?: string;
+  inTxHashes?: string[];
+  txHashes?: string[];
+  updatedAt?: number;
+  originChainId?: number;
+  destinationChainId?: number;
+}
+
+export async function fetchIntentStatus(
+  requestId: string,
+): Promise<IntentStatusResponse> {
+  const response = await fetch(
+    `${MAINNET_RELAY_API}/intents/status/v3?requestId=${requestId}`,
+    { cache: "no-store" },
+  );
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(
+      error.message || `Failed to fetch intent status: ${response.status}`,
+    );
+  }
+
+  return response.json();
+}

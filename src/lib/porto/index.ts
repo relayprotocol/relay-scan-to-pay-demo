@@ -1,5 +1,5 @@
 /**
- * Porto Scan-to-Pay Module
+ * Porto Wallet Module
  *
  * Self-contained module for EIP-681 payment parsing and processing
  * with USD amount support via Relay Price API.
@@ -16,7 +16,26 @@ export type {
   PaymentResolutionOptions,
   TokenConfig,
   ChainConfig,
+  Transaction,
+  PageView,
+  ScannerState,
+  PaymentCurrency,
+  PaymentFlowState,
 } from "./types";
+
+// Constants
+export {
+  ARBITRUM_USDC,
+  ERC20_ABI,
+  CHAIN_NAMES,
+  PORTO_CHAINS,
+  PORTO_CHAIN_IDS,
+  EXPLORER_URLS,
+  SUPPORTED_TOKENS,
+} from "./constants";
+
+// Utils
+export { parseWalletError, getExplorerUrl, getTokenExplorerUrl } from "./utils";
 
 // EIP-681 Parser
 export {

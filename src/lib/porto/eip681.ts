@@ -101,7 +101,9 @@ export function parseScientificNotation(value: string): string {
     const [intPart, decPart] = value.split(".");
     // Decimal values in wei context should be whole numbers
     // If there's a decimal, it's likely a mistake - use just the integer part
-    console.warn(`Warning: Decimal value "${value}" in wei context. Using integer part only.`);
+    console.warn(
+      `Warning: Decimal value "${value}" in wei context. Using integer part only.`,
+    );
     return intPart || "0";
   }
 
@@ -200,7 +202,8 @@ export function parseEIP681(uri: string): ParsedPayment | null {
   const usdAmount = parameters.usdAmount;
 
   // Determine if this is an ERC-20 transfer
-  const isERC20 = functionName === "transfer" || functionName === "transferFrom";
+  const isERC20 =
+    functionName === "transfer" || functionName === "transferFrom";
 
   // For ERC-20 transfers, extract recipient and amount from parameters
   let recipient: string | undefined;
@@ -208,10 +211,7 @@ export function parseEIP681(uri: string): ParsedPayment | null {
 
   if (isERC20) {
     // ERC-20 transfer parameters: address (recipient), uint256 (amount)
-    recipient =
-      parameters.address ||
-      parameters.to ||
-      parameters._to;
+    recipient = parameters.address || parameters.to || parameters._to;
 
     tokenAmount =
       parameters.uint256 ||
@@ -242,7 +242,12 @@ export function parseEIP681(uri: string): ParsedPayment | null {
       key !== "usdAmount"
     ) {
       // For uint256, ensure it's parsed correctly
-      if (key === "uint256" || key === "amount" || key === "_amount" || key === "_value") {
+      if (
+        key === "uint256" ||
+        key === "amount" ||
+        key === "_amount" ||
+        key === "_value"
+      ) {
         cleanedParams[key] = parseScientificNotation(val);
       } else {
         cleanedParams[key] = val;
@@ -256,7 +261,8 @@ export function parseEIP681(uri: string): ParsedPayment | null {
     usdAmount,
     chainId,
     functionName,
-    parameters: Object.keys(cleanedParams).length > 0 ? cleanedParams : undefined,
+    parameters:
+      Object.keys(cleanedParams).length > 0 ? cleanedParams : undefined,
     gas,
     gasPrice,
     isERC20,
@@ -309,9 +315,7 @@ export function validatePayment(payment: ParsedPayment): {
       const valueBigInt = BigInt(payment.value);
       // Warn if value seems unreasonably large (> 1 billion ETH worth)
       if (valueBigInt > BigInt("1000000000000000000000000000")) {
-        warnings.push(
-          "Value seems extremely large - please verify amount"
-        );
+        warnings.push("Value seems extremely large - please verify amount");
       }
     } catch {
       errors.push("Invalid value format");

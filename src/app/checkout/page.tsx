@@ -16,7 +16,11 @@ import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { useSetActiveWallet } from "@privy-io/wagmi";
 import { useWalletClient } from "wagmi";
 import { useQuote } from "@relayprotocol/relay-kit-hooks";
-import { getClient, adaptViemWallet, type ProgressData } from "@relayprotocol/relay-sdk";
+import {
+  getClient,
+  adaptViemWallet,
+  type ProgressData,
+} from "@relayprotocol/relay-sdk";
 import { useRelayChains } from "@/providers";
 import { useRelayCurrencies } from "@/hooks/useRelayCurrencies";
 import { useTokenBalance } from "@/hooks/useTokenBalance";
@@ -137,7 +141,7 @@ function CheckoutContent() {
       destinationCurrency: paymentIntent.destinationCurrency,
       amount: paymentIntent.amount,
       recipient: paymentIntent.recipient,
-      tradeType: paymentIntent.tradeType,
+      tradeType: "EXACT_OUTPUT" as const,
       referrer: "relay-scan-to-pay-demo",
     };
   }, [
