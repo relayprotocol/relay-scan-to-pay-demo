@@ -7,8 +7,6 @@
  * Used on the POS pay page to show payment confirmation.
  */
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
 import { QRCodeSVG } from "qrcode.react";
 import {
   CheckCircle2,
@@ -50,8 +48,6 @@ export function PaymentStatusTracker({
   chainName,
   onReset,
 }: PaymentStatusTrackerProps) {
-  const [showQR, setShowQR] = useState(true);
-
   const {
     data: statusData,
     isLoading,
@@ -64,12 +60,8 @@ export function PaymentStatusTracker({
 
   const status = statusData?.status;
 
-  // Hide QR code once payment is detected (not waiting anymore)
-  useEffect(() => {
-    if (status && status !== "waiting") {
-      setShowQR(false);
-    }
-  }, [status]);
+  // Show QR only while waiting for payment
+  const showQR = !status || status === "waiting";
 
   // Format USD for display
   const formatUsd = (amount: string) => {
