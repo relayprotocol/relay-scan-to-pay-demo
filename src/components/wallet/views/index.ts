@@ -1,5 +1,5 @@
 /**
- * Porto View Components
+ * Wallet View Components
  */
 
 export { ConnectView } from "./ConnectView";

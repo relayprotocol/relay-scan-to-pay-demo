@@ -1,7 +1,7 @@
 /**
- * Porto Wallet Constants
+ * Wallet Constants
  *
- * Shared constants for the Porto wallet integration.
+ * Shared constants for the wallet integration.
  */
 
 import { parseAbi } from "viem";
@@ -43,14 +43,14 @@ export const CHAIN_NAMES: Record<number, string> = {
 };
 
 /**
- * Porto-supported chains (from layout.tsx configuration)
+ * Supported chains
  */
-export const PORTO_CHAINS = [base, mainnet, optimism, arbitrum, polygon] as const;
+export const SUPPORTED_CHAINS = [base, mainnet, optimism, arbitrum, polygon] as const;
 
 /**
- * Porto chain IDs for quick lookup
+ * Supported chain IDs for quick lookup
  */
-export const PORTO_CHAIN_IDS = PORTO_CHAINS.map((chain) => chain.id);
+export const SUPPORTED_CHAIN_IDS = SUPPORTED_CHAINS.map((chain) => chain.id);
 
 /**
  * Block explorer URLs by chain ID

@@ -19,6 +19,9 @@ interface PaymentIntent {
   recipient: string;
   merchantName: string;
   description?: string;
+  currencySymbol: string;
+  currencyDecimals: number;
+  chainName: string;
 }
 
 export default function GeneratePaymentLinkPage() {
@@ -54,7 +57,7 @@ export default function GeneratePaymentLinkPage() {
 
   // Build the payment intent
   const paymentIntent: PaymentIntent | null = useMemo(() => {
-    if (!selectedChainId || !selectedCurrency) return null;
+    if (!selectedChainId || !selectedCurrency || !selectedChain) return null;
     return {
       destinationChainId: selectedChainId,
       destinationCurrency: selectedCurrency.address || "",
@@ -62,6 +65,9 @@ export default function GeneratePaymentLinkPage() {
       recipient: recipientAddress,
       merchantName,
       description,
+      currencySymbol: selectedCurrency.symbol || "",
+      currencyDecimals: selectedCurrency.decimals || 18,
+      chainName: selectedChain.displayName || selectedChain.name || "",
     };
   }, [
     selectedChainId,

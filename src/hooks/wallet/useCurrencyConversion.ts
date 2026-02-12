@@ -5,8 +5,8 @@
  */
 
 import { useState, useCallback } from "react";
-import { getTokenPrice, convertUSDToWei } from "@/lib/porto/price";
-import { getTokenConfig } from "@/lib/porto/price";
+import { getTokenPrice, convertUSDToWei } from "@/lib/wallet/price";
+import { getTokenConfig } from "@/lib/wallet/price";
 
 interface ConversionResult {
   amountWei: string;

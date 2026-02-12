@@ -7,6 +7,7 @@
  * Used on the POS pay page to show payment confirmation.
  */
 
+import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import {
   CheckCircle2,
@@ -16,19 +17,39 @@ import {
   AlertTriangle,
   RefreshCcw,
   ExternalLink,
+  Copy,
+  Check,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  useIntentStatus,
-  getStatusDescription,
-  isSuccessStatus,
-  isFailureStatus,
-  isTerminalStatus,
-} from "@/hooks/useIntentStatus";
-import type { IntentStatusValue } from "@/lib/relay";
+import { useRelayTracking, type RelayRequest } from "@/hooks/useRelayTracking";
+
+type RelayStatus = NonNullable<RelayRequest["status"]>;
+
+const TERMINAL_STATUSES: RelayStatus[] = ["success", "failure", "refund"];
+
+function isTerminalStatus(s: RelayStatus): boolean {
+  return TERMINAL_STATUSES.includes(s);
+}
+
+function getStatusDescription(s: RelayStatus): string {
+  switch (s) {
+    case "waiting":
+      return "Waiting for payment...";
+    case "pending":
+      return "Payment received, processing...";
+    case "success":
+      return "Payment complete!";
+    case "refund":
+      return "Processing refund...";
+    case "failure":
+      return "Payment failed";
+    default:
+      return "Processing...";
+  }
+}
 
 interface PaymentStatusTrackerProps {
-  requestId: string;
+  depositAddress: string | null;
   eip681Uri: string;
   merchantName: string;
   usdAmount: string;
@@ -39,7 +60,7 @@ interface PaymentStatusTrackerProps {
 }
 
 export function PaymentStatusTracker({
-  requestId,
+  depositAddress,
   eip681Uri,
   merchantName,
   usdAmount,
@@ -48,17 +69,26 @@ export function PaymentStatusTracker({
   chainName,
   onReset,
 }: PaymentStatusTrackerProps) {
+  const [copiedUri, setCopiedUri] = useState(false);
+
+  const handleCopyUri = async () => {
+    await navigator.clipboard.writeText(eip681Uri);
+    setCopiedUri(true);
+    setTimeout(() => setCopiedUri(false), 2000);
+  };
+
   const {
-    data: statusData,
+    data: relayRequest,
     isLoading,
     error,
     refetch,
-  } = useIntentStatus(requestId, {
+  } = useRelayTracking(depositAddress, {
     pollingInterval: 2000,
-    stopOnTerminal: true,
+    enabled: !!depositAddress,
   });
 
-  const status = statusData?.status;
+  const status = depositAddress ? relayRequest?.status : undefined;
+  const requestId = depositAddress ? relayRequest?.id : undefined;
 
   // Show QR only while waiting for payment
   const showQR = !status || status === "waiting";
@@ -73,21 +103,17 @@ export function PaymentStatusTracker({
   };
 
   // Get status icon
-  const getStatusIcon = (s: IntentStatusValue) => {
+  const getStatusIcon = (s: RelayStatus) => {
     switch (s) {
       case "waiting":
         return <Clock className="w-6 h-6" />;
       case "pending":
-      case "submitted":
-      case "delayed":
         return <Loader2 className="w-6 h-6 animate-spin" />;
       case "success":
         return <CheckCircle2 className="w-6 h-6" />;
       case "failure":
         return <XCircle className="w-6 h-6" />;
       case "refund":
-        return <Loader2 className="w-6 h-6 animate-spin" />;
-      case "refunded":
         return <RefreshCcw className="w-6 h-6" />;
       default:
         return <AlertTriangle className="w-6 h-6" />;
@@ -95,7 +121,7 @@ export function PaymentStatusTracker({
   };
 
   // Get status color classes
-  const getStatusColor = (s: IntentStatusValue) => {
+  const getStatusColor = (s: RelayStatus) => {
     switch (s) {
       case "success":
         return "text-green-600 bg-green-100";
@@ -103,17 +129,13 @@ export function PaymentStatusTracker({
         return "text-red-600 bg-red-100";
       case "refund":
         return "text-yellow-600 bg-yellow-100";
-      case "refunded":
-        return "text-yellow-600 bg-yellow-100";
-      case "delayed":
-        return "text-orange-600 bg-orange-100";
       default:
         return "text-blue-600 bg-blue-100";
     }
   };
 
   // Success screen
-  if (status && isSuccessStatus(status)) {
+  if (status === "success") {
     return (
       <div className="text-center space-y-6">
         <div className="w-20 h-20 mx-auto rounded-full bg-green-100 flex items-center justify-center">
@@ -137,27 +159,21 @@ export function PaymentStatusTracker({
               {amountFormatted} {tokenSymbol}
             </span>
           </div>
-          {statusData?.inTxHashes?.[0] && (
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Deposit Tx</span>
-              <span className="font-mono text-xs">
-                {statusData.inTxHashes[0].slice(0, 10)}...
-              </span>
-            </div>
-          )}
         </div>
 
         {/* Actions */}
         <div className="flex flex-col gap-3">
-          <a
-            href={`https://relay.link/transaction/${requestId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            View on Relay
-            <ExternalLink className="w-4 h-4" />
-          </a>
+          {requestId && (
+            <a
+              href={`https://relay.link/transaction/${requestId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 px-4 py-3 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
+            >
+              View payment
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          )}
 
           {onReset && (
             <Button variant="outline" onClick={onReset} className="w-full">
@@ -170,20 +186,17 @@ export function PaymentStatusTracker({
   }
 
   // Refund/Failure screen
-  if (status && isFailureStatus(status)) {
-    const isRefundStatus = status === "refund" || status === "refunded";
-    const isRefundInProgress = status === "refund";
+  if (status === "failure" || status === "refund") {
+    const isRefund = status === "refund";
 
     return (
       <div className="text-center space-y-6">
         <div
           className={`w-20 h-20 mx-auto rounded-full flex items-center justify-center ${
-            isRefundStatus ? "bg-yellow-100" : "bg-red-100"
+            isRefund ? "bg-yellow-100" : "bg-red-100"
           }`}
         >
-          {isRefundInProgress ? (
-            <Loader2 className="w-10 h-10 text-yellow-600 animate-spin" />
-          ) : status === "refunded" ? (
+          {isRefund ? (
             <RefreshCcw className="w-10 h-10 text-yellow-600" />
           ) : (
             <XCircle className="w-10 h-10 text-red-600" />
@@ -193,34 +206,31 @@ export function PaymentStatusTracker({
         <div>
           <h2
             className={`text-2xl font-bold ${
-              isRefundStatus ? "text-yellow-600" : "text-red-600"
+              isRefund ? "text-yellow-600" : "text-red-600"
             }`}
           >
-            {isRefundInProgress
-              ? "Processing Refund..."
-              : status === "refunded"
-                ? "Payment Refunded"
-                : "Payment Failed"}
+            {isRefund ? "Payment Refunded" : "Payment Failed"}
           </h2>
           <p className="text-muted-foreground mt-2">
-            {statusData?.details ||
-              (isRefundInProgress
-                ? "Your payment is being refunded."
-                : "The payment could not be completed.")}
+            {isRefund
+              ? "Your payment has been refunded."
+              : "The payment could not be completed."}
           </p>
         </div>
 
         {/* Actions */}
         <div className="flex flex-col gap-3">
-          <a
-            href={`https://relay.link/transaction/${requestId}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center gap-2 px-4 py-3 border border-border font-medium rounded-lg hover:bg-muted transition-colors"
-          >
-            View Details on Relay
-            <ExternalLink className="w-4 h-4" />
-          </a>
+          {requestId && (
+            <a
+              href={`https://relay.link/transaction/${requestId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-2 px-4 py-3 border border-border font-medium rounded-lg hover:bg-muted transition-colors"
+            >
+              View payment details
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          )}
 
           {onReset && (
             <Button onClick={onReset} className="w-full">
@@ -239,22 +249,16 @@ export function PaymentStatusTracker({
       <div className="flex items-center justify-center gap-3">
         <div
           className={`w-10 h-10 rounded-full flex items-center justify-center ${
-            status ? getStatusColor(status) : "bg-muted text-muted-foreground"
+            status ? getStatusColor(status) : "text-blue-600 bg-blue-100"
           }`}
         >
-          {isLoading && !status ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : status ? (
-            getStatusIcon(status)
-          ) : (
-            <Clock className="w-5 h-5" />
-          )}
+          {status ? getStatusIcon(status) : <Clock className="w-6 h-6" />}
         </div>
         <div>
           <p className="font-medium">
-            {status ? getStatusDescription(status) : "Initializing..."}
+            {status ? getStatusDescription(status) : "Waiting for payment..."}
           </p>
-          {status && !isTerminalStatus(status) && (
+          {(!status || !isTerminalStatus(status)) && (
             <p className="text-xs text-muted-foreground">
               Checking for updates...
             </p>
@@ -272,6 +276,22 @@ export function PaymentStatusTracker({
           <p className="text-xs text-muted-foreground mt-2">
             Send {amountFormatted} {tokenSymbol} on {chainName}
           </p>
+          <button
+            onClick={handleCopyUri}
+            className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg hover:bg-muted transition-colors"
+          >
+            {copiedUri ? (
+              <>
+                <Check className="w-3 h-3 text-green-500" />
+                Copied!
+              </>
+            ) : (
+              <>
+                <Copy className="w-3 h-3" />
+                Copy payment URI
+              </>
+            )}
+          </button>
         </div>
       )}
 
@@ -315,17 +335,19 @@ export function PaymentStatusTracker({
       )}
 
       {/* Track on Relay link */}
-      <div className="text-center">
-        <a
-          href={`https://relay.link/transaction/${requestId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-1"
-        >
-          Track on Relay
-          <ExternalLink className="w-3 h-3" />
-        </a>
-      </div>
+      {requestId && (
+        <div className="text-center">
+          <a
+            href={`https://relay.link/transaction/${requestId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-muted-foreground hover:text-primary inline-flex items-center gap-1"
+          >
+            View payment
+            <ExternalLink className="w-3 h-3" />
+          </a>
+        </div>
+      )}
     </div>
   );
 }

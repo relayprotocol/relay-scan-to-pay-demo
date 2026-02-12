@@ -21,7 +21,7 @@ export default function TestQRPage() {
         <div className="text-center mb-8">
           <h1 className="text-2xl font-bold mb-2">Test Payment QR</h1>
           <p className="text-sm text-muted-foreground">
-            Scan this with Porto Pay to test
+            Scan this with the wallet to test
           </p>
         </div>
 
@@ -43,7 +43,7 @@ export default function TestQRPage() {
           </div>
 
           <Link
-            href="/porto-scan-to-pay"
+            href="/wallet"
             className="w-full py-3 px-4 bg-primary text-primary-foreground font-medium rounded-lg text-center hover:bg-primary/90 transition-colors"
           >
             Open Scanner

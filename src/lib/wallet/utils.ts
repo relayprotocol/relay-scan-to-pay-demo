@@ -1,13 +1,13 @@
 /**
- * Porto Wallet Utilities
+ * Wallet Utilities
  *
- * Helper functions for the Porto wallet integration.
+ * Helper functions for the wallet integration.
  */
 
 import { EXPLORER_URLS } from "./constants";
 
 /**
- * Parse Porto/wallet errors into user-friendly messages
+ * Parse wallet errors into user-friendly messages
  */
 export function parseWalletError(error: Error): string {
   const message = error.message || "";

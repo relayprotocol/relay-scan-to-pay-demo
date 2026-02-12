@@ -1,5 +1,5 @@
 /**
- * Porto Wallet Module
+ * Wallet Module
  *
  * Self-contained module for EIP-681 payment parsing and processing
  * with USD amount support via Relay Price API.
@@ -28,8 +28,8 @@ export {
   ARBITRUM_USDC,
   ERC20_ABI,
   CHAIN_NAMES,
-  PORTO_CHAINS,
-  PORTO_CHAIN_IDS,
+  SUPPORTED_CHAINS,
+  SUPPORTED_CHAIN_IDS,
   EXPLORER_URLS,
   SUPPORTED_TOKENS,
 } from "./constants";

@@ -13,27 +13,30 @@ import {
   CheckCircle2,
   Loader2,
   Copy,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { QRScanner } from "@/components/porto/QRScanner";
-import { PaymentPreview } from "@/components/porto/PaymentPreview";
-import { CHAIN_NAMES } from "@/lib/porto/constants";
-import type { ScannerState, PaymentCurrency } from "@/lib/porto/types";
-import type { ResolvedPayment } from "@/lib/porto";
+import { QRScanner } from "@/components/wallet/QRScanner";
+import { PaymentPreview } from "@/components/wallet/PaymentPreview";
+import { CHAIN_NAMES } from "@/lib/wallet/constants";
+import type { ScannerState, PaymentCurrency } from "@/lib/wallet/types";
+import type { ResolvedPayment } from "@/lib/wallet";
 
 interface ScannerViewProps {
   scannerState: ScannerState;
   resolvedPayment: ResolvedPayment | null;
   error: string | null;
-  callsId: string | null;
   isSending: boolean;
   selectedCurrency: PaymentCurrency | null;
+  insufficientBalance: boolean;
+  insufficientGas: boolean;
+  relayRequestId: string | null;
+  relayStatus: string | null;
   onScan: (data: string) => void;
   onScanError: (error: string) => void;
   onConfirm: () => void;
   onCancel: () => void;
   onClose: () => void;
-  onCopyCallsId: () => void;
   onChangeCurrency?: () => void;
 }
 
@@ -41,17 +44,37 @@ export function ScannerView({
   scannerState,
   resolvedPayment,
   error,
-  callsId,
   isSending,
   selectedCurrency,
+  insufficientBalance,
+  insufficientGas,
+  relayRequestId,
+  relayStatus,
   onScan,
   onScanError,
   onConfirm,
   onCancel,
   onClose,
-  onCopyCallsId,
   onChangeCurrency,
 }: ScannerViewProps) {
+  // Human-readable Relay status
+  const getRelayStatusText = (status: string | null) => {
+    switch (status) {
+      case "waiting":
+        return "Waiting for deposit confirmation...";
+      case "pending":
+        return "Processing payment...";
+      case "success":
+        return "Payment complete!";
+      case "failure":
+        return "Payment failed";
+      case "refund":
+        return "Processing refund...";
+      default:
+        return "Processing payment...";
+    }
+  };
+
   return (
     <main className="min-h-screen bg-background">
       {/* Header */}
@@ -120,7 +143,17 @@ export function ScannerView({
         {scannerState === "preview" && resolvedPayment && (
           <div className="space-y-6">
             <div className="text-center mb-4">
-              <h2 className="text-xl font-semibold">Confirm Payment</h2>
+              {resolvedPayment.merchantName && (
+                <h2 className="text-xl font-semibold">{resolvedPayment.merchantName}</h2>
+              )}
+              {resolvedPayment.description && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  {resolvedPayment.description}
+                </p>
+              )}
+              {!resolvedPayment.merchantName && (
+                <h2 className="text-xl font-semibold">Confirm Payment</h2>
+              )}
               <p className="text-sm text-muted-foreground mt-1">
                 Review the details below
               </p>
@@ -133,6 +166,8 @@ export function ScannerView({
               isLoading={isSending}
               selectedCurrency={selectedCurrency}
               onChangeCurrency={onChangeCurrency}
+              insufficientBalance={insufficientBalance}
+              insufficientGas={insufficientGas}
             />
           </div>
         )}
@@ -148,42 +183,38 @@ export function ScannerView({
           </div>
         )}
 
-        {/* Confirming State - Waiting for wallet approval */}
+        {/* Confirming State - Sending transaction */}
         {scannerState === "confirming" && (
           <div className="flex flex-col items-center justify-center py-12">
             <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-            <p className="text-muted-foreground">Approve in your wallet</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Review and confirm the transaction in Porto
-            </p>
+            <p className="text-muted-foreground">Sending transaction...</p>
           </div>
         )}
 
-        {/* Pending State - Transaction submitted, waiting for on-chain confirmation */}
+        {/* Pending State - Deposit sent, tracking Relay payment */}
         {scannerState === "pending" && (
           <div className="flex flex-col items-center justify-center py-12">
-            <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-            <p className="text-muted-foreground">Confirming on chain...</p>
-            <p className="text-xs text-muted-foreground mt-1">
-              Your transaction is being processed
+            <div className="relative mb-6">
+              <div className="w-20 h-20 rounded-full border-4 border-muted" />
+              <div className="absolute inset-0 w-20 h-20 rounded-full border-4 border-t-primary animate-spin" />
+            </div>
+            <p className="font-medium">
+              {getRelayStatusText(relayStatus)}
             </p>
-            {callsId && (
-              <div className="mt-4 w-full bg-muted/50 rounded-lg p-3">
-                <p className="text-xs text-muted-foreground mb-1">
-                  Transaction ID
-                </p>
-                <div className="flex items-center gap-2">
-                  <code className="text-xs font-mono flex-1 truncate">
-                    {callsId}
-                  </code>
-                  <button
-                    onClick={onCopyCallsId}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              This may take a moment
+            </p>
+
+            {relayRequestId && (
+              <a
+                href={`https://relay.link/transaction/${relayRequestId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+              >
+                View payment
+                <ExternalLink className="w-3 h-3" />
+              </a>
             )}
           </div>
         )}
@@ -194,28 +225,21 @@ export function ScannerView({
             <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mb-4">
               <CheckCircle2 className="w-10 h-10 text-green-500" />
             </div>
-            <h2 className="text-xl font-semibold mb-2">Payment Sent!</h2>
+            <h2 className="text-xl font-semibold mb-2">Payment Complete!</h2>
             <p className="text-sm text-muted-foreground mb-6">
-              Your transaction has been submitted
+              Your payment has been confirmed
             </p>
 
-            {callsId && (
-              <div className="w-full bg-muted/50 rounded-lg p-3 mb-6">
-                <p className="text-xs text-muted-foreground mb-1">
-                  Transaction ID
-                </p>
-                <div className="flex items-center gap-2">
-                  <code className="text-xs font-mono flex-1 truncate">
-                    {callsId}
-                  </code>
-                  <button
-                    onClick={onCopyCallsId}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <Copy className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
+            {relayRequestId && (
+              <a
+                href={`https://relay.link/transaction/${relayRequestId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 mb-4 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                View payment
+                <ExternalLink className="w-4 h-4" />
+              </a>
             )}
 
             <div className="flex gap-3 w-full">
@@ -252,20 +276,16 @@ export function ScannerView({
               </div>
             )}
 
-            {error?.includes("Insufficient funds") && (
-              <div className="bg-muted/50 rounded-lg p-3 mb-4 w-full">
-                <p className="text-xs text-muted-foreground text-center">
-                  Need funds?{" "}
-                  <a
-                    href="https://porto.sh"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    Add funds to your Porto wallet
-                  </a>
-                </p>
-              </div>
+            {relayRequestId && (
+              <a
+                href={`https://relay.link/transaction/${relayRequestId}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mb-4 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors"
+              >
+                View payment details
+                <ExternalLink className="w-3 h-3" />
+              </a>
             )}
 
             <div className="flex gap-3 w-full">

@@ -1,7 +1,7 @@
 /**
  * EIP-681 Parser Tests
  *
- * Run with: npx tsx src/lib/porto/eip681.test.ts
+ * Run with: npx tsx src/lib/wallet/eip681.test.ts
  *
  * Comprehensive tests for EIP-681 parsing including:
  * - Basic ETH transfers

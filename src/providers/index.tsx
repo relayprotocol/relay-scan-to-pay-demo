@@ -104,8 +104,9 @@ export function Providers({
           accentColor: "#676FFF",
         },
         embeddedWallets: {
+          showWalletUIs: false,
           ethereum: {
-            createOnLogin: "users-without-wallets",
+            createOnLogin: "all-users",
           },
         },
         defaultChain: privyChains[0],

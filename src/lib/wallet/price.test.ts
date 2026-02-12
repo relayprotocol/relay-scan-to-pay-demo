@@ -1,7 +1,7 @@
 /**
  * Relay Price API Tests
  *
- * Run with: npx tsx src/lib/porto/price.test.ts
+ * Run with: npx tsx src/lib/wallet/price.test.ts
  *
  * Tests for USD ↔ crypto conversions and price validation.
  * Note: Some tests require network access to the Relay API.

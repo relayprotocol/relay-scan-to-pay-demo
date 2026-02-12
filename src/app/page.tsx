@@ -1,8 +1,7 @@
-"use client";
-
 import Link from "next/link";
-import { useMemo } from "react";
+import Image from "next/image";
 import { RelayLogo } from "@/components/icons/RelayLogo";
+import { getChainSquaredIconUrl } from "@/lib/relay";
 
 // Pre-generated demo payment intent
 const demoPaymentIntent = {
@@ -12,176 +11,276 @@ const demoPaymentIntent = {
   recipient: "0x03508bB71268BBA25ECaCC8F620e01866650532c",
   merchantName: "Demo Coffee Shop",
   description: "Coffee + Pastry",
+  currencySymbol: "USDC",
+  currencyDecimals: 6,
+  chainName: "Base",
 };
 
+// Chain IDs for floating icons
+const floatingChains = [
+  { id: 1, name: "Ethereum" },
+  { id: 8453, name: "Base" },
+  { id: 42161, name: "Arbitrum" },
+  { id: 10, name: "Optimism" },
+  { id: 137, name: "Polygon" },
+];
+
+const floatingStablecoins = [
+  {
+    name: "USDC",
+    url: "https://assets.relay.link/icons/currencies/usdc.png",
+  },
+  {
+    name: "USDT",
+    url: "https://assets.relay.link/icons/currencies/usdt.png",
+  },
+];
+
+// Positions and animation configs for floating icons
+const floatingIconConfigs = [
+  { top: "8%", left: "5%", size: 48, duration: "18s", delay: "0s" },
+  { top: "15%", right: "8%", size: 40, duration: "22s", delay: "2s" },
+  { top: "55%", left: "3%", size: 36, duration: "20s", delay: "4s" },
+  { top: "65%", right: "6%", size: 44, duration: "16s", delay: "1s" },
+  { top: "35%", left: "10%", size: 32, duration: "24s", delay: "3s" },
+  { top: "25%", right: "12%", size: 42, duration: "19s", delay: "5s" },
+  { top: "75%", left: "8%", size: 38, duration: "21s", delay: "2.5s" },
+];
+
 export default function Home() {
-  const demoPayUrl = useMemo(() => {
-    const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
-    return `${baseUrl}/pay?intent=${encodeURIComponent(JSON.stringify(demoPaymentIntent))}`;
-  }, []);
+  const demoPayUrl = `/pay?intent=${encodeURIComponent(JSON.stringify(demoPaymentIntent))}`;
+
+  // Build list of all floating icons
+  const allIcons = [
+    ...floatingChains.map((chain) => ({
+      name: chain.name,
+      url: getChainSquaredIconUrl(chain.id),
+    })),
+    ...floatingStablecoins,
+  ];
 
   return (
-    <main className="min-h-screen p-8">
-      <div className="max-w-3xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-12">
-          <RelayLogo width={100} height={28} />
-          <a
-            href="https://relay.link"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            relay.link
-          </a>
+    <main className="min-h-screen">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden px-6 py-20 md:py-32">
+        {/* Floating background icons */}
+        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+          {allIcons.map((icon, i) => {
+            const config = floatingIconConfigs[i % floatingIconConfigs.length];
+            return (
+              <div
+                key={icon.name}
+                className="absolute animate-float"
+                style={{
+                  top: config.top,
+                  left: config.left,
+                  right: config.right,
+                  animationDuration: config.duration,
+                  animationDelay: config.delay,
+                  opacity: 0.15,
+                }}
+              >
+                <Image
+                  src={icon.url}
+                  alt=""
+                  width={config.size}
+                  height={config.size}
+                  className="rounded-lg"
+                />
+              </div>
+            );
+          })}
         </div>
 
-        {/* Hero */}
-        <div className="mb-12">
-          <h1 className="text-4xl font-bold mb-4">Scan-to-Pay Demo</h1>
-          <p className="text-lg text-muted-foreground mb-6">
-            A demonstration of crypto payments for physical checkout flows using{" "}
+        {/* Hero content */}
+        <div className="relative z-10 mx-auto max-w-3xl text-center">
+          <div className="mb-8 flex justify-center">
+            <RelayLogo width={140} height={32} />
+          </div>
+          <h1 className="mb-6 text-5xl font-bold tracking-tight md:text-6xl">
+            Scan to Pay with Stablecoins
+          </h1>
+          <p className="mx-auto mb-8 max-w-2xl text-lg text-muted-foreground md:text-xl">
+            Accept stablecoin payments at checkout. Generate a payment link,
+            display a QR code, and get paid instantly — powered by{" "}
             <a
               href="https://relay.link"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-primary hover:underline font-medium"
+              className="font-medium text-primary hover:underline"
             >
               Relay
-            </a>{" "}
-            and{" "}
-            <a
-              href="https://porto.sh"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline font-medium"
-            >
-              Porto
             </a>
-            . Merchants generate payment links, customers scan QR codes, and pay
-            seamlessly with their Porto wallet.
+            .
           </p>
         </div>
+      </section>
 
-        {/* How it works */}
-        <div className="mb-12">
-          <h2 className="text-2xl font-semibold mb-4">How it works</h2>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="p-4 border rounded-lg bg-card">
-              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold mb-3">
+      {/* Two Demo Flow Cards */}
+      <section className="mx-auto max-w-5xl px-6 pb-20">
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Card 1: Payment Links */}
+          <div className="group relative rounded-2xl border bg-card p-8 transition-shadow hover:shadow-lg">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+              <svg
+                className="h-6 w-6 text-primary"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244"
+                />
+              </svg>
+            </div>
+            <h2 className="mb-2 text-2xl font-semibold">Payment Links</h2>
+            <p className="mb-5 text-muted-foreground">
+              Merchant generates a link, customer pays from any wallet — no
+              wallet connection needed. Uses Relay deposit addresses.
+            </p>
+            <div className="mb-6 flex flex-wrap gap-2">
+              <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
+                No wallet connection
+              </span>
+              <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
+                Any external wallet
+              </span>
+              <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
+                QR code or link
+              </span>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/generate-payment-link"
+                className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+              >
+                Generate Payment Link
+              </Link>
+              <Link
+                href={demoPayUrl}
+                className="inline-flex items-center justify-center rounded-lg border px-5 py-3 font-medium transition-colors hover:bg-muted"
+              >
+                Try Demo
+              </Link>
+            </div>
+          </div>
+
+          {/* Card 2: Scan to Pay (Embedded Wallet) */}
+          <div className="group relative rounded-2xl border bg-card p-8 transition-shadow hover:shadow-lg">
+            <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+              <svg
+                className="h-6 w-6 text-primary"
+                fill="none"
+                viewBox="0 0 24 24"
+                strokeWidth={1.5}
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5Z"
+                />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M13.5 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5Z"
+                />
+              </svg>
+            </div>
+            <h2 className="mb-2 text-2xl font-semibold">Scan to Pay</h2>
+            <p className="mb-5 text-muted-foreground">
+              Built-in wallet with QR scanner. Connect once, scan and pay —
+              powered by Privy embedded wallets + Relay.
+            </p>
+            <div className="mb-6 flex flex-wrap gap-2">
+              <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
+                Embedded wallet
+              </span>
+              <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
+                QR scanner
+              </span>
+              <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
+                Multi-chain
+              </span>
+            </div>
+            <Link
+              href="/wallet"
+              className="inline-flex items-center justify-center rounded-lg bg-primary px-5 py-3 font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Open Wallet
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* How It Works */}
+      <section className="border-t bg-muted/30 px-6 py-20">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="mb-10 text-center text-3xl font-semibold">
+            How It Works
+          </h2>
+          <div className="grid gap-8 sm:grid-cols-3">
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold text-lg">
                 1
               </div>
-              <h3 className="font-medium mb-1">Merchant generates link</h3>
+              <h3 className="mb-2 font-medium text-lg">
+                Merchant creates a payment link
+              </h3>
               <p className="text-sm text-muted-foreground">
-                Create a payment link specifying the amount and recipient
-                address for USDC.
+                Specify the amount, destination chain, and recipient address for
+                stablecoin payment.
               </p>
             </div>
-            <div className="p-4 border rounded-lg bg-card">
-              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold mb-3">
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold text-lg">
                 2
               </div>
-              <h3 className="font-medium mb-1">Link generates QR code</h3>
+              <h3 className="mb-2 font-medium text-lg">
+                Link generates a QR code
+              </h3>
               <p className="text-sm text-muted-foreground">
                 The checkout page displays a deposit address and QR code for the
-                transaction.
+                customer to scan.
               </p>
             </div>
-            <div className="p-4 border rounded-lg bg-card">
-              <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-semibold mb-3">
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold text-lg">
                 3
               </div>
-              <h3 className="font-medium mb-1">Customer pays with Porto</h3>
+              <h3 className="mb-2 font-medium text-lg">
+                Customer scans and pays
+              </h3>
               <p className="text-sm text-muted-foreground">
-                Customer scans the QR code with their Porto wallet and completes
-                the payment.
+                Customer scans the QR code with their wallet and pays with
+                stablecoins. Relay handles the rest.
               </p>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* Demo Section */}
-        <div className="grid gap-8 md:grid-cols-2 mb-12">
-          {/* Generate Payment Link */}
-          <div className="p-6 border rounded-xl bg-card">
-            <h3 className="font-semibold text-lg mb-2">Merchant View</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Generate a payment link as a merchant. Share it with customers to
-              receive payments.
-            </p>
-            <Link
-              href="/generate-payment-link"
-              className="inline-flex items-center justify-center w-full py-3 px-4 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              Generate Payment Link
-            </Link>
-          </div>
-
-          {/* Demo Payment Link */}
-          <div className="p-6 border rounded-xl bg-card">
-            <h3 className="font-semibold text-lg mb-2">Try the Demo</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Open a demo payment link to see the customer payment experience.
-            </p>
-            <div className="text-sm text-muted-foreground mb-4">
-              <p className="font-medium text-foreground">Demo Coffee Shop</p>
-              <p>1 USDC on Base</p>
-            </div>
-            <Link
-              href={demoPayUrl}
-              className="inline-flex items-center justify-center w-full py-3 px-4 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
-            >
-              Open Payment Link
-            </Link>
-          </div>
-        </div>
-
-        {/* Porto Wallet Section */}
-        <div className="mb-12 p-6 border rounded-xl bg-gradient-to-br from-primary/5 to-primary/10">
-          <div className="flex items-center gap-2 mb-2">
-            <h3 className="font-semibold text-lg">Porto Wallet</h3>
-          </div>
-          <p className="text-sm text-muted-foreground mb-4">
-            Porto Wallet is used for demo purposes to showcase the QR
-            scan-to-pay feature and how wallets can interact with Relay.
-          </p>
-          <div className="flex flex-wrap gap-2 mb-4">
-            <span className="px-2 py-1 text-xs bg-muted rounded-md">
-              EIP-681 Support
-            </span>
-            <span className="px-2 py-1 text-xs bg-muted rounded-md">
-              USDC Payments
-            </span>
-            <span className="px-2 py-1 text-xs bg-muted rounded-md">
-              Multi-chain
-            </span>
-          </div>
-          <Link
-            href="/porto-wallet"
-            className="inline-flex items-center justify-center w-full sm:w-auto py-3 px-6 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
-          >
-            Open Wallet
-          </Link>
-        </div>
-
-        {/* Powered by Relay */}
-        <div className="text-center py-8 border-t">
-          <p className="text-sm text-muted-foreground mb-3">Powered by</p>
+      {/* Footer */}
+      <footer className="border-t px-6 py-10">
+        <div className="mx-auto max-w-4xl text-center">
+          <p className="mb-3 text-sm text-muted-foreground">Powered by</p>
           <a
             href="https://relay.link"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-foreground hover:text-primary transition-colors"
+            className="inline-flex items-center gap-2 text-foreground transition-colors hover:text-primary"
           >
             <RelayLogo width={80} height={22} />
           </a>
-
-          <div className="flex items-center justify-center gap-4 mt-4">
+          <div className="mt-4 flex items-center justify-center gap-4">
             <a
               href="https://docs.relay.link"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               Documentation
             </a>
@@ -190,13 +289,13 @@ export default function Home() {
               href="https://github.com/relayprotocol"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               GitHub
             </a>
           </div>
         </div>
-      </div>
+      </footer>
     </main>
   );
 }

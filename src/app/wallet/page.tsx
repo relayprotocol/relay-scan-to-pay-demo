@@ -1,31 +1,30 @@
 "use client";
 
 /**
- * Porto Wallet Page
+ * Wallet Page
  *
- * Orchestrator for the Porto wallet experience featuring:
+ * Orchestrator for the embedded wallet experience featuring:
  * - Wallet homescreen with balance and recent transactions
  * - QR code scanner for payments
  * - Currency selection for payment flexibility
- * - Porto wallet integration using ERC-5792 (wallet_sendCalls)
+ * - Privy embedded wallet integration
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   useAccount,
-  useConnect,
-  useDisconnect,
-  useSendCalls,
   useReadContract,
-  useConfig,
+  useWriteContract,
   useSwitchChain,
-  useWaitForCallsStatus,
+  useConfig,
 } from "wagmi";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { useSetActiveWallet } from "@privy-io/wagmi";
 import { getPublicClient } from "wagmi/actions";
-import { getAddress, encodeFunctionData, parseAbi, formatUnits } from "viem";
+import { getAddress, formatUnits } from "viem";
 
-import { ConnectView, HomeView, ScannerView } from "@/components/porto/views";
-import { PaymentCurrencySelector } from "@/components/porto/PaymentCurrencySelector";
+import { ConnectView, HomeView, ScannerView } from "@/components/wallet/views";
+import { PaymentCurrencySelector } from "@/components/wallet/PaymentCurrencySelector";
 import {
   parseEIP681,
   type ParsedPayment,
@@ -34,12 +33,13 @@ import {
   type ScannerState,
   type PaymentCurrency,
   type Transaction,
-} from "@/lib/porto";
-import { ARBITRUM_USDC, ERC20_ABI, CHAIN_NAMES } from "@/lib/porto/constants";
-import { parseWalletError } from "@/lib/porto/utils";
+} from "@/lib/wallet";
+import { ARBITRUM_USDC, ERC20_ABI, CHAIN_NAMES } from "@/lib/wallet/constants";
+import { parseWalletError } from "@/lib/wallet/utils";
 import { useRelayCurrencies } from "@/hooks/useRelayCurrencies";
+import { useRelayTracking } from "@/hooks/useRelayTracking";
 
-export default function PortoWalletPage() {
+export default function WalletPage() {
   // View state
   const [view, setView] = useState<PageView>("home");
 
@@ -48,7 +48,6 @@ export default function PortoWalletPage() {
   const [parsedPayment, setParsedPayment] = useState<ParsedPayment | null>(null);
   const [resolvedPayment, setResolvedPayment] = useState<ResolvedPayment | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [callsId, setCallsId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   // Currency selection state
@@ -84,38 +83,45 @@ export default function PortoWalletPage() {
     }
   }, [selectedCurrencyMetadata, selectedCurrency]);
 
+  // Privy hooks
+  const { login, logout, authenticated, ready } = usePrivy();
+  const { wallets } = useWallets();
+  const { setActiveWallet } = useSetActiveWallet();
+
   // Wagmi hooks
-  const { address, isConnected, chainId: currentChainId, connector } = useAccount();
-  const { connect, connectors, isPending: isConnecting } = useConnect();
-  const { disconnect } = useDisconnect();
+  const { address, isConnected, chainId: currentChainId } = useAccount();
   const config = useConfig();
   const { switchChainAsync } = useSwitchChain();
-  const { mutate: sendCalls, isPending: isSending } = useSendCalls();
+  const { writeContract, isPending: isSending } = useWriteContract();
 
-  // Check if connected with Porto (not another wallet like MetaMask via Privy)
-  const isPortoConnected =
-    isConnected &&
-    connector &&
-    (connector.name.toLowerCase().includes("porto") || connector.id === "porto");
+  // Find and activate Privy embedded wallet
+  const embeddedWallet = wallets.find((w) => w.walletClientType === "privy");
 
-  // Track transaction confirmation status
-  const { data: callsStatus, isLoading: isWaitingForConfirmation } = useWaitForCallsStatus({
-    id: callsId as string,
-    query: {
-      enabled: !!callsId && scannerState === "pending",
-      refetchInterval: 1000, // Poll every second
-    },
+  useEffect(() => {
+    if (embeddedWallet) {
+      setActiveWallet(embeddedWallet);
+    }
+  }, [embeddedWallet, setActiveWallet]);
+
+  // The deposit address from the EIP-681 URI (recipient field) — used for Relay tracking
+  const depositAddress = resolvedPayment?.recipient ?? null;
+
+  // Track Relay payment status by deposit address
+  const { data: relayRequest } = useRelayTracking(depositAddress, {
+    pollingInterval: 3000,
+    enabled: !!depositAddress && scannerState === "pending",
   });
 
-  // Update state when transaction is confirmed
+  // Update state based on Relay intent status
   useEffect(() => {
-    if (callsStatus?.status === "success") {
+    if (!relayRequest?.status) return;
+    if (relayRequest.status === "success") {
       setScannerState("success");
-    } else if (callsStatus?.status === "failure") {
-      setError("Transaction failed on chain");
+    } else if (relayRequest.status === "failure" || relayRequest.status === "refund") {
+      setError(relayRequest.status === "refund" ? "Payment was refunded" : "Payment failed");
       setScannerState("error");
     }
-  }, [callsStatus]);
+  }, [relayRequest]);
 
   // Fetch USDC balance on Arbitrum
   const { data: usdcBalance, isLoading: isLoadingBalance } = useReadContract({
@@ -130,11 +136,6 @@ export default function PortoWalletPage() {
   const formattedBalance = usdcBalance ? formatUnits(usdcBalance, ARBITRUM_USDC.decimals) : "0";
   const balanceUsd = usdcBalance ? parseFloat(formatUnits(usdcBalance, ARBITRUM_USDC.decimals)) : 0;
 
-  // Find Porto connector - must use Porto for this page
-  const portoConnector = connectors.find(
-    (c) => c.name.toLowerCase().includes("porto") || c.id === "porto"
-  );
-
   // Copy address to clipboard
   const copyAddress = useCallback(async () => {
     if (address) {
@@ -144,16 +145,15 @@ export default function PortoWalletPage() {
     }
   }, [address]);
 
-  // Handle wallet connection - always use Porto
+  // Handle wallet connection via Privy
   const handleConnect = useCallback(() => {
-    if (portoConnector) {
-      connect({ connector: portoConnector });
-    } else {
-      // Porto connector should always be available from layout
-      console.error("Porto connector not found in:", connectors.map((c) => c.name));
-      setError("Porto wallet connector not available. Please refresh the page.");
-    }
-  }, [connect, connectors, portoConnector]);
+    login();
+  }, [login]);
+
+  // Handle disconnect via Privy
+  const handleDisconnect = useCallback(() => {
+    logout();
+  }, [logout]);
 
   // Handle QR scan result
   const handleScan = useCallback(
@@ -183,7 +183,7 @@ export default function PortoWalletPage() {
         };
         setResolvedPayment(resolved);
 
-        // Set original currency as selected
+        // Set original currency as selected, with balance if available
         const originalCurrency: PaymentCurrency = {
           address: getAddress(parsed.tokenAddress) as `0x${string}`,
           symbol: "USDC",
@@ -192,32 +192,28 @@ export default function PortoWalletPage() {
           chainName: CHAIN_NAMES[parsed.chainId] || `Chain ${parsed.chainId}`,
           isStablecoin: true,
         };
-        setSelectedCurrency(originalCurrency);
 
-        if (!isConnected || !address) {
-          setScannerState("preview");
-          return;
-        }
-
-        // Check balance
-        const publicClient = getPublicClient(config, { chainId: parsed.chainId });
-        if (publicClient) {
-          const tokenAddress = getAddress(parsed.tokenAddress);
-          const amount = BigInt(parsed.value);
-          const balance = await publicClient.readContract({
-            address: tokenAddress,
-            abi: ERC20_ABI,
-            functionName: "balanceOf",
-            args: [address],
-          });
-
-          if (balance < amount) {
-            const balanceFormatted = formatUnits(balance, 6);
-            const requiredFormatted = formatUnits(amount, 6);
-            throw new Error(`Insufficient USDC balance. You have ${balanceFormatted} but need ${requiredFormatted}.`);
+        // Fetch balance for the original currency so we can show insufficient balance reactively
+        if (isConnected && address) {
+          const publicClient = getPublicClient(config, { chainId: parsed.chainId });
+          if (publicClient) {
+            try {
+              const tokenAddress = getAddress(parsed.tokenAddress);
+              const balance = await publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: "balanceOf",
+                args: [address],
+              });
+              originalCurrency.balance = formatUnits(balance, 6);
+              originalCurrency.balanceWei = balance;
+            } catch {
+              // Balance fetch failed — don't block, just proceed without balance info
+            }
           }
         }
 
+        setSelectedCurrency(originalCurrency);
         setScannerState("preview");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to process QR code");
@@ -236,25 +232,7 @@ export default function PortoWalletPage() {
 
     try {
       const paymentChainId = selectedCurrency.chainId;
-      const publicClient = getPublicClient(config, { chainId: paymentChainId });
-      if (!publicClient) throw new Error(`Unsupported chain: ${CHAIN_NAMES[paymentChainId] || paymentChainId}`);
-
       const requiredAmount = BigInt(resolvedPayment.resolvedValue);
-      const tokenAddress = getAddress(selectedCurrency.address);
-
-      // Check balance
-      const balance = await publicClient.readContract({
-        address: tokenAddress,
-        abi: ERC20_ABI,
-        functionName: "balanceOf",
-        args: [address],
-      });
-
-      if (balance < requiredAmount) {
-        const balanceFormatted = formatUnits(balance, selectedCurrency.decimals);
-        const requiredFormatted = formatUnits(requiredAmount, selectedCurrency.decimals);
-        throw new Error(`Insufficient balance. You have ${balanceFormatted} ${selectedCurrency.symbol} but need ${requiredFormatted}.`);
-      }
 
       // Switch chain if needed
       if (currentChainId !== paymentChainId) {
@@ -262,19 +240,28 @@ export default function PortoWalletPage() {
       }
 
       const recipientAddress = getAddress(resolvedPayment.recipient!);
-      const data = encodeFunctionData({
-        abi: parseAbi(["function transfer(address to, uint256 amount) returns (bool)"]),
-        functionName: "transfer",
-        args: [recipientAddress, requiredAmount],
-      });
 
-      sendCalls(
-        { calls: [{ to: tokenAddress, data }], chainId: paymentChainId },
+      writeContract(
         {
-          onSuccess: (result) => {
-            const id = typeof result === "string" ? result : result.id;
-            setCallsId(id);
-            // Move to pending state - useWaitForCallsStatus will track confirmation
+          address: getAddress(selectedCurrency.address),
+          abi: [
+            {
+              name: "transfer",
+              type: "function",
+              stateMutability: "nonpayable",
+              inputs: [
+                { name: "to", type: "address" },
+                { name: "amount", type: "uint256" },
+              ],
+              outputs: [{ name: "", type: "bool" }],
+            },
+          ],
+          functionName: "transfer",
+          args: [recipientAddress, requiredAmount],
+          chainId: paymentChainId,
+        },
+        {
+          onSuccess: () => {
             setScannerState("pending");
           },
           onError: (err) => {
@@ -287,14 +274,13 @@ export default function PortoWalletPage() {
       setError(err instanceof Error ? err.message : "Transaction failed");
       setScannerState("error");
     }
-  }, [resolvedPayment, isConnected, address, config, currentChainId, switchChainAsync, sendCalls, selectedCurrency]);
+  }, [resolvedPayment, isConnected, address, currentChainId, switchChainAsync, writeContract, selectedCurrency]);
 
   // Reset scanner state
   const handleCancelScanner = useCallback(() => {
     setParsedPayment(null);
     setResolvedPayment(null);
     setError(null);
-    setCallsId(null);
     setSelectedCurrency(null);
     setScannerState("scanning");
   }, []);
@@ -309,10 +295,42 @@ export default function PortoWalletPage() {
     setView("scanner");
   }, [handleCancelScanner]);
 
-  // Copy calls ID
-  const copyCallsId = useCallback(() => {
-    if (callsId) navigator.clipboard.writeText(callsId);
-  }, [callsId]);
+  // Get the Relay request ID for "View payment" links
+  const relayRequestId = relayRequest?.id ?? null;
+  const relayStatus = relayRequest?.status ?? null;
+
+  // Derive insufficient balance from selected currency's balance vs required amount
+  const insufficientBalance = useMemo(() => {
+    if (!selectedCurrency || !resolvedPayment) return false;
+    if (selectedCurrency.balanceWei === undefined) return false;
+    return selectedCurrency.balanceWei < BigInt(resolvedPayment.resolvedValue);
+  }, [selectedCurrency, resolvedPayment]);
+
+  // Fetch native gas balance on the selected chain to ensure user can send txs
+  const [nativeBalance, setNativeBalance] = useState<bigint | null>(null);
+
+  useEffect(() => {
+    if (!selectedCurrency || !address || scannerState !== "preview") {
+      setNativeBalance(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const publicClient = getPublicClient(config, { chainId: selectedCurrency.chainId });
+        if (!publicClient) return;
+        const balance = await publicClient.getBalance({ address });
+        if (!cancelled) setNativeBalance(balance);
+      } catch {
+        if (!cancelled) setNativeBalance(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedCurrency?.chainId, address, config, scannerState]);
+
+  // 0.0001 native token — enough for several L2 txs, conservative for mainnet
+  const MIN_GAS_WEI = BigInt(1e14);
+  const insufficientGas = nativeBalance !== null && nativeBalance < MIN_GAS_WEI;
 
   // Handle currency selection
   const handleCurrencySelect = useCallback(
@@ -347,15 +365,17 @@ export default function PortoWalletPage() {
     }
   }, [isConnected, scannerState]);
 
-  // Render based on connection state and view
-  // If not connected OR connected with non-Porto wallet, show connect view
-  if (!isConnected || !isPortoConnected) {
+  // Show loading while Privy initializes
+  if (!ready) {
+    return null;
+  }
+
+  // Render based on authentication state and view
+  if (!authenticated) {
     return (
       <ConnectView
         onConnect={handleConnect}
-        isConnecting={isConnecting}
-        wrongWallet={isConnected && !isPortoConnected}
-        onDisconnect={() => disconnect()}
+        isConnecting={false}
       />
     );
   }
@@ -371,7 +391,7 @@ export default function PortoWalletPage() {
         copied={copied}
         onCopyAddress={copyAddress}
         onOpenScanner={openScanner}
-        onDisconnect={() => disconnect()}
+        onDisconnect={handleDisconnect}
       />
     );
   }
@@ -382,15 +402,17 @@ export default function PortoWalletPage() {
         scannerState={scannerState}
         resolvedPayment={resolvedPayment}
         error={error}
-        callsId={callsId}
         isSending={isSending}
         selectedCurrency={selectedCurrency}
+        insufficientBalance={insufficientBalance}
+        insufficientGas={insufficientGas}
+        relayRequestId={relayRequestId}
+        relayStatus={relayStatus}
         onScan={handleScan}
         onScanError={(err) => console.error("Scan error:", err)}
         onConfirm={handleConfirm}
         onCancel={handleCancelScanner}
         onClose={closeScanner}
-        onCopyCallsId={copyCallsId}
         onChangeCurrency={() => setShowCurrencySelector(true)}
       />
 

@@ -32,8 +32,10 @@ const VALID_PARAMS = new Set([
   "gasLimit",
   "gasPrice",
   "data",
-  // Our extension
+  // Our extensions
   "usdAmount",
+  "merchantName",
+  "description",
   // Common ERC-20 function params
   "address",
   "uint256",
@@ -198,8 +200,10 @@ export function parseEIP681(uri: string): ParsedPayment | null {
     ? parseScientificNotation(parameters.gasPrice)
     : undefined;
 
-  // Extract our USD amount extension
+  // Extract our custom extensions
   const usdAmount = parameters.usdAmount;
+  const merchantName = parameters.merchantName;
+  const description = parameters.description;
 
   // Determine if this is an ERC-20 transfer
   const isERC20 =
@@ -239,7 +243,9 @@ export function parseEIP681(uri: string): ParsedPayment | null {
       key !== "gas" &&
       key !== "gasLimit" &&
       key !== "gasPrice" &&
-      key !== "usdAmount"
+      key !== "usdAmount" &&
+      key !== "merchantName" &&
+      key !== "description"
     ) {
       // For uint256, ensure it's parsed correctly
       if (
@@ -268,6 +274,8 @@ export function parseEIP681(uri: string): ParsedPayment | null {
     isERC20,
     tokenAddress: isERC20 ? targetAddress : undefined,
     recipient: isERC20 ? recipient : targetAddress,
+    merchantName,
+    description,
   };
 }
 
@@ -415,6 +423,14 @@ export function buildEIP681URI(payment: Partial<ParsedPayment>): string {
 
   if (payment.usdAmount) {
     params.set("usdAmount", payment.usdAmount);
+  }
+
+  if (payment.merchantName) {
+    params.set("merchantName", payment.merchantName);
+  }
+
+  if (payment.description) {
+    params.set("description", payment.description);
   }
 
   if (payment.gas) {

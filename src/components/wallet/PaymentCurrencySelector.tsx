@@ -22,13 +22,13 @@ import {
 import { useRelayCurrencies } from "@/hooks/useRelayCurrencies";
 import {
   CHAIN_NAMES,
-  PORTO_CHAIN_IDS,
+  SUPPORTED_CHAIN_IDS,
   SUPPORTED_TOKENS,
   ERC20_ABI,
-} from "@/lib/porto/constants";
+} from "@/lib/wallet/constants";
 import { getChainSquaredIconUrl, type Currency } from "@/lib/relay";
 import { cn } from "@/lib/utils";
-import type { PaymentCurrency } from "@/lib/porto/types";
+import type { PaymentCurrency } from "@/lib/wallet/types";
 
 interface PaymentCurrencySelectorProps {
   open: boolean;
@@ -76,7 +76,7 @@ export function PaymentCurrencySelector({
   // Build token query for Relay API - format: 'chainId:address'
   const tokenQueryList = useMemo(() => {
     const tokenIds: string[] = [];
-    for (const chainId of PORTO_CHAIN_IDS) {
+    for (const chainId of SUPPORTED_CHAIN_IDS) {
       const chainTokens = SUPPORTED_TOKENS[chainId] || [];
       for (const token of chainTokens) {
         tokenIds.push(`${chainId}:${token.address}`);
@@ -114,7 +114,7 @@ export function PaymentCurrencySelector({
     try {
       const tokenPromises: Promise<TokenWithBalance | null>[] = [];
 
-      for (const chainId of PORTO_CHAIN_IDS) {
+      for (const chainId of SUPPORTED_CHAIN_IDS) {
         const chainTokens = SUPPORTED_TOKENS[chainId] || [];
 
         for (const token of chainTokens) {

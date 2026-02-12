@@ -1,5 +1,5 @@
 /**
- * Porto Scan-to-Pay Types
+ * Scan-to-Pay Types
  *
  * Types for EIP-681 parsing and payment processing with USD amount support.
  */
@@ -30,6 +30,10 @@ export interface ParsedPayment {
   tokenAddress?: string;
   /** Actual recipient for ERC-20 transfers (from `address` parameter) */
   recipient?: string;
+  /** Merchant name (our extension to EIP-681) */
+  merchantName?: string;
+  /** Merchant description (our extension to EIP-681) */
+  description?: string;
 }
 
 /**
@@ -131,7 +135,7 @@ export interface Transaction {
 }
 
 /**
- * Page view state for Porto wallet
+ * Page view state for wallet
  */
 export type PageView = "home" | "scanner";
 

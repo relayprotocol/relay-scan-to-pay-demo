@@ -12,9 +12,9 @@ import Image from "next/image";
 import { AlertTriangle, ChevronRight, Loader2, Info, Coins } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn, truncateAddress, formatUsd } from "@/lib/utils";
-import { formatWeiToDisplay, CHAIN_NAMES } from "@/lib/porto";
+import { formatWeiToDisplay, CHAIN_NAMES } from "@/lib/wallet";
 import { getChainSquaredIconUrl } from "@/lib/relay";
-import type { ResolvedPayment, PaymentCurrency } from "@/lib/porto";
+import type { ResolvedPayment, PaymentCurrency } from "@/lib/wallet";
 
 interface PaymentPreviewProps {
   payment: ResolvedPayment;
@@ -24,6 +24,8 @@ interface PaymentPreviewProps {
   className?: string;
   selectedCurrency?: PaymentCurrency | null;
   onChangeCurrency?: () => void;
+  insufficientBalance?: boolean;
+  insufficientGas?: boolean;
 }
 
 export function PaymentPreview({
@@ -34,6 +36,8 @@ export function PaymentPreview({
   className,
   selectedCurrency,
   onChangeCurrency,
+  insufficientBalance = false,
+  insufficientGas = false,
 }: PaymentPreviewProps) {
   // Format the crypto amount for display
   const cryptoAmount = useMemo(() => {
@@ -191,10 +195,34 @@ export function PaymentPreview({
         </div>
       </div>
 
+      {/* Insufficient Balance Warning */}
+      {insufficientBalance && (
+        <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-xl p-3 mb-4">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-yellow-700 dark:text-yellow-300">
+              Insufficient balance to complete this payment.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Insufficient Gas Warning */}
+      {insufficientGas && !insufficientBalance && (
+        <div className="bg-yellow-500/10 border border-yellow-500/50 rounded-xl p-3 mb-4">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-yellow-700 dark:text-yellow-300">
+              Not enough ETH for gas on {displayChainName}. Fund your wallet with ETH to cover transaction fees.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Pay Button */}
       <Button
         onClick={onConfirm}
-        disabled={isLoading}
+        disabled={isLoading || insufficientBalance || insufficientGas}
         className="w-full h-12 text-base font-medium rounded-xl mb-4"
         size="lg"
       >
@@ -203,6 +231,10 @@ export function PaymentPreview({
             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
             Confirming...
           </>
+        ) : insufficientBalance ? (
+          "Insufficient balance"
+        ) : insufficientGas ? (
+          "Insufficient gas"
         ) : (
           "Pay now"
         )}

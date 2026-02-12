@@ -1,7 +1,5 @@
 /**
- * Porto Components
- *
- * Components for the Porto wallet feature.
+ * Wallet Components
  */
 
 export { QRScanner } from "./QRScanner";
