@@ -32,6 +32,7 @@ export {
   SUPPORTED_CHAIN_IDS,
   EXPLORER_URLS,
   SUPPORTED_TOKENS,
+  NATIVE_TOKEN_ADDRESS,
 } from "./constants";
 
 // Utils

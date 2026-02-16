@@ -68,6 +68,11 @@ export const EXPLORER_URLS: Record<number, string> = {
 };
 
 /**
+ * Zero address representing native token
+ */
+export const NATIVE_TOKEN_ADDRESS = "0x0000000000000000000000000000000000000000" as `0x${string}`;
+
+/**
  * Supported tokens for currency selection (tokens users can pay with)
  * Maps chainId -> token configs
  */
@@ -82,6 +87,12 @@ export const SUPPORTED_TOKENS: Record<
 > = {
   // Ethereum
   1: [
+    {
+      address: NATIVE_TOKEN_ADDRESS,
+      symbol: "ETH",
+      decimals: 18,
+      isStablecoin: false,
+    },
     {
       address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
       symbol: "USDC",
@@ -98,6 +109,12 @@ export const SUPPORTED_TOKENS: Record<
   // Optimism
   10: [
     {
+      address: NATIVE_TOKEN_ADDRESS,
+      symbol: "ETH",
+      decimals: 18,
+      isStablecoin: false,
+    },
+    {
       address: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
       symbol: "USDC",
       decimals: 6,
@@ -106,6 +123,12 @@ export const SUPPORTED_TOKENS: Record<
   ],
   // Polygon
   137: [
+    {
+      address: NATIVE_TOKEN_ADDRESS,
+      symbol: "POL",
+      decimals: 18,
+      isStablecoin: false,
+    },
     {
       address: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
       symbol: "USDC",
@@ -116,6 +139,12 @@ export const SUPPORTED_TOKENS: Record<
   // Base
   8453: [
     {
+      address: NATIVE_TOKEN_ADDRESS,
+      symbol: "ETH",
+      decimals: 18,
+      isStablecoin: false,
+    },
+    {
       address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
       symbol: "USDC",
       decimals: 6,
@@ -124,6 +153,12 @@ export const SUPPORTED_TOKENS: Record<
   ],
   // Arbitrum
   42161: [
+    {
+      address: NATIVE_TOKEN_ADDRESS,
+      symbol: "ETH",
+      decimals: 18,
+      isStablecoin: false,
+    },
     {
       address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
       symbol: "USDC",

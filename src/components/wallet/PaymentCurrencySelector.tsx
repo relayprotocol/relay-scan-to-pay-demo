@@ -24,8 +24,10 @@ import {
   CHAIN_NAMES,
   SUPPORTED_CHAIN_IDS,
   SUPPORTED_TOKENS,
+  NATIVE_TOKEN_ADDRESS,
   ERC20_ABI,
 } from "@/lib/wallet/constants";
+import { getNativeTokenPrice } from "@/lib/wallet/price";
 import { getChainSquaredIconUrl, type Currency } from "@/lib/relay";
 import { cn } from "@/lib/utils";
 import type { PaymentCurrency } from "@/lib/wallet/types";
@@ -124,12 +126,19 @@ export function PaymentCurrencySelector({
                 const publicClient = getPublicClient(config, { chainId });
                 if (!publicClient) return null;
 
-                const balance = await publicClient.readContract({
-                  address: token.address,
-                  abi: ERC20_ABI,
-                  functionName: "balanceOf",
-                  args: [userAddress],
-                });
+                let balance: bigint;
+                if (token.address === NATIVE_TOKEN_ADDRESS) {
+                  // Native token: fetch via getBalance
+                  balance = await publicClient.getBalance({ address: userAddress });
+                } else {
+                  // ERC-20: fetch via balanceOf
+                  balance = await publicClient.readContract({
+                    address: token.address,
+                    abi: ERC20_ABI,
+                    functionName: "balanceOf",
+                    args: [userAddress],
+                  });
+                }
 
                 // Only include tokens with balance > 0
                 if (balance === BigInt(0)) return null;
@@ -137,25 +146,38 @@ export function PaymentCurrencySelector({
                 const formattedBalance = formatUnits(balance, token.decimals);
                 const balanceNum = parseFloat(formattedBalance);
 
-                // For stablecoins, USD value = balance
-                const balanceUsd = token.isStablecoin
-                  ? balanceNum.toFixed(2)
-                  : balanceNum.toFixed(2); // Would need price for non-stablecoins
+                // For stablecoins, USD value = balance; for native tokens, fetch price
+                let balanceUsd: string;
+                let requiredAmount: string;
+                if (token.isStablecoin) {
+                  balanceUsd = balanceNum.toFixed(2);
+                  requiredAmount = usdAmount;
+                } else {
+                  // Fetch native token price for USD conversion
+                  try {
+                    const price = await getNativeTokenPrice(chainId);
+                    balanceUsd = (balanceNum * price).toFixed(2);
+                    // Required amount in native token = usdAmount / price
+                    const requiredTokenAmount = parseFloat(usdAmount) / price;
+                    requiredAmount = requiredTokenAmount.toString();
+                  } catch {
+                    balanceUsd = "0.00";
+                    requiredAmount = usdAmount;
+                  }
+                }
 
-                // Required amount for this token
-                const requiredAmount = token.isStablecoin ? usdAmount : usdAmount;
                 const requiredWei = BigInt(
                   Math.floor(parseFloat(requiredAmount) * 10 ** token.decimals)
                 );
 
-                // Get metadata from Relay API
+                // Get metadata from Relay API (not available for native tokens)
                 const metadataKey = `${chainId}:${token.address.toLowerCase()}`;
                 const metadata = currencyMetadataMap.get(metadataKey);
 
                 return {
                   address: token.address,
                   symbol: metadata?.symbol || token.symbol,
-                  name: metadata?.name,
+                  name: metadata?.name || (token.address === NATIVE_TOKEN_ADDRESS ? token.symbol : undefined),
                   decimals: token.decimals,
                   chainId,
                   chainName: CHAIN_NAMES[chainId] || `Chain ${chainId}`,
@@ -417,9 +439,13 @@ export function PaymentCurrencySelector({
                   <div className="flex-1 min-w-0 text-left">
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{token.name || token.symbol}</span>
-                      {isOriginalToken(token) && (
-                        <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded">
-                          Original
+                      {isOriginalToken(token) ? (
+                        <span className="text-xs bg-green-500/10 text-green-700 dark:text-green-400 px-1.5 py-0.5 rounded">
+                          Direct
+                        </span>
+                      ) : (
+                        <span className="text-xs bg-blue-500/10 text-blue-700 dark:text-blue-400 px-1.5 py-0.5 rounded">
+                          Via Relay
                         </span>
                       )}
                     </div>

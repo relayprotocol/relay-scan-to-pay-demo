@@ -26,6 +26,7 @@ interface PaymentPreviewProps {
   onChangeCurrency?: () => void;
   insufficientBalance?: boolean;
   insufficientGas?: boolean;
+  isDirectSend?: boolean;
 }
 
 export function PaymentPreview({
@@ -38,6 +39,7 @@ export function PaymentPreview({
   onChangeCurrency,
   insufficientBalance = false,
   insufficientGas = false,
+  isDirectSend = true,
 }: PaymentPreviewProps) {
   // Format the crypto amount for display
   const cryptoAmount = useMemo(() => {
@@ -76,12 +78,20 @@ export function PaymentPreview({
         </h2>
       </div>
 
-      {/* Network Badge */}
-      <div className="flex justify-center mb-6">
+      {/* Network & Route Badges */}
+      <div className="flex flex-wrap justify-center gap-2 mb-6">
         <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-muted rounded-full text-sm">
           <div className="w-2 h-2 rounded-full bg-green-500" />
           <span className="text-muted-foreground">Network:</span>
           <span className="font-medium">{displayChainName}</span>
+        </div>
+        <div className={cn(
+          "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm",
+          isDirectSend
+            ? "bg-green-500/10 text-green-700 dark:text-green-400"
+            : "bg-blue-500/10 text-blue-700 dark:text-blue-400"
+        )}>
+          {isDirectSend ? "Direct transfer" : "Via Relay"}
         </div>
       </div>
 

@@ -24,7 +24,7 @@ interface PaymentIntent {
 }
 
 // Generate EIP-681 URI for QR code
-// Encodes a direct transfer of the destination token on the destination chain
+// Encodes a direct transfer of the destination token to the merchant's address
 function generateEIP681Uri(
   tokenAddress: string,
   chainId: number,
@@ -108,13 +108,10 @@ async function PayContent({ searchParams }: PayPageProps) {
     paymentIntent.chainName ??
     `Chain ${paymentIntent.destinationChainId}`;
 
-  // For same-chain same-token payments, we generate a direct transfer EIP-681 URI
-  // to the merchant's address. No Relay quote or deposit address needed.
-  // The wallet flow handles cross-chain logic + 15bps when the user picks a different currency.
+  // Format amounts directly from the payment intent — no Relay quote needed.
+  // The EIP-681 URI points directly to the merchant's address.
   const amountFormatted = formatUnits(BigInt(paymentIntent.amount), tokenDecimals);
-
-  // Approximate USD amount (for stablecoins, 1:1 with face value)
-  const usdAmount = amountFormatted;
+  const usdAmount = amountFormatted; // stablecoins ≈ 1:1
 
   // Generate EIP-681 URI — direct transfer to merchant on the destination chain
   const eip681Uri = generateEIP681Uri(
@@ -158,7 +155,10 @@ async function PayContent({ searchParams }: PayPageProps) {
         {/* Payment Status Tracker with QR Code */}
         <div className="mb-8">
           <PaymentStatusTracker
-            depositAddress={null}
+            recipientAddress={paymentIntent.recipient}
+            tokenAddress={paymentIntent.destinationCurrency}
+            chainId={paymentIntent.destinationChainId}
+            expectedAmount={paymentIntent.amount}
             eip681Uri={eip681Uri}
             merchantName={paymentIntent.merchantName}
             usdAmount={usdAmount}

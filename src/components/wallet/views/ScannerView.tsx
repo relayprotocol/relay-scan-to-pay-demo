@@ -18,7 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { QRScanner } from "@/components/wallet/QRScanner";
 import { PaymentPreview } from "@/components/wallet/PaymentPreview";
-import { CHAIN_NAMES } from "@/lib/wallet/constants";
+import { CHAIN_NAMES, EXPLORER_URLS } from "@/lib/wallet/constants";
 import type { ScannerState, PaymentCurrency } from "@/lib/wallet/types";
 import type { ResolvedPayment } from "@/lib/wallet";
 
@@ -32,6 +32,9 @@ interface ScannerViewProps {
   insufficientGas: boolean;
   relayRequestId: string | null;
   relayStatus: string | null;
+  isDirectSend: boolean;
+  directTxHash: string | null;
+  txChainId: number | null;
   onScan: (data: string) => void;
   onScanError: (error: string) => void;
   onConfirm: () => void;
@@ -50,6 +53,9 @@ export function ScannerView({
   insufficientGas,
   relayRequestId,
   relayStatus,
+  isDirectSend,
+  directTxHash,
+  txChainId,
   onScan,
   onScanError,
   onConfirm,
@@ -168,6 +174,7 @@ export function ScannerView({
               onChangeCurrency={onChangeCurrency}
               insufficientBalance={insufficientBalance}
               insufficientGas={insufficientGas}
+              isDirectSend={isDirectSend}
             />
           </div>
         )}
@@ -220,42 +227,62 @@ export function ScannerView({
         )}
 
         {/* Success State */}
-        {scannerState === "success" && (
-          <div className="flex flex-col items-center justify-center py-12">
-            <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mb-4">
-              <CheckCircle2 className="w-10 h-10 text-green-500" />
-            </div>
-            <h2 className="text-xl font-semibold mb-2">Payment Complete!</h2>
-            <p className="text-sm text-muted-foreground mb-6">
-              Your payment has been confirmed
-            </p>
+        {scannerState === "success" && (() => {
+          const explorerUrl = directTxHash && txChainId
+            ? `${EXPLORER_URLS[txChainId] || "https://etherscan.io"}/tx/${directTxHash}`
+            : null;
 
-            {relayRequestId && (
-              <a
-                href={`https://relay.link/transaction/${relayRequestId}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 mb-4 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
-              >
-                View payment
-                <ExternalLink className="w-4 h-4" />
-              </a>
-            )}
+          return (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mb-4">
+                <CheckCircle2 className="w-10 h-10 text-green-500" />
+              </div>
+              <h2 className="text-xl font-semibold mb-2">Payment Complete!</h2>
+              <p className="text-sm text-muted-foreground mb-6">
+                Your payment has been confirmed
+              </p>
 
-            <div className="flex gap-3 w-full">
-              <Button
-                variant="outline"
-                onClick={onCancel}
-                className="flex-1"
-              >
-                Scan Another
-              </Button>
-              <Button onClick={onClose} className="flex-1">
-                Done
-              </Button>
+              {/* Block explorer link for direct sends */}
+              {explorerUrl && (
+                <a
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 mb-4 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  View transaction
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+
+              {/* Relay link for cross-chain sends */}
+              {!explorerUrl && relayRequestId && (
+                <a
+                  href={`https://relay.link/transaction/${relayRequestId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 mb-4 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  View payment
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+              )}
+
+              <div className="flex gap-3 w-full">
+                <Button
+                  variant="outline"
+                  onClick={onCancel}
+                  className="flex-1"
+                >
+                  Scan Another
+                </Button>
+                <Button onClick={onClose} className="flex-1">
+                  Done
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* Error State */}
         {scannerState === "error" && (
