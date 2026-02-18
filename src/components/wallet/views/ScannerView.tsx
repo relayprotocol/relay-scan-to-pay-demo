@@ -21,12 +21,15 @@ import { PaymentPreview } from "@/components/wallet/PaymentPreview";
 import { CHAIN_NAMES, EXPLORER_URLS } from "@/lib/wallet/constants";
 import type { ScannerState, PaymentCurrency } from "@/lib/wallet/types";
 import type { ResolvedPayment } from "@/lib/wallet";
+import type { QuoteResponse } from "@/lib/relay";
 
 interface ScannerViewProps {
   scannerState: ScannerState;
   resolvedPayment: ResolvedPayment | null;
   error: string | null;
   isSending: boolean;
+  isQuoteLoading?: boolean;
+  relayQuote?: QuoteResponse | null;
   selectedCurrency: PaymentCurrency | null;
   insufficientBalance: boolean;
   insufficientGas: boolean;
@@ -48,6 +51,8 @@ export function ScannerView({
   resolvedPayment,
   error,
   isSending,
+  isQuoteLoading = false,
+  relayQuote = null,
   selectedCurrency,
   insufficientBalance,
   insufficientGas,
@@ -170,6 +175,8 @@ export function ScannerView({
               onConfirm={onConfirm}
               onCancel={onCancel}
               isLoading={isSending}
+              isQuoteLoading={isQuoteLoading}
+              relayQuote={relayQuote}
               selectedCurrency={selectedCurrency}
               onChangeCurrency={onChangeCurrency}
               insufficientBalance={insufficientBalance}

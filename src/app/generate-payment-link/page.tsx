@@ -4,10 +4,7 @@ import { useState, useMemo } from "react";
 import Link from "next/link";
 import { parseUnits } from "viem";
 import { useRelayChains } from "@/providers";
-import {
-  TokenSelectorModal,
-  SelectedTokenButton,
-} from "@/components/common";
+import { TokenSelectorModal, SelectedTokenButton } from "@/components/common";
 
 import type { Currency } from "@/lib/relay";
 
@@ -121,7 +118,7 @@ export default function GeneratePaymentLinkPage() {
         <h1 className="text-3xl font-bold mt-4 mb-2">Generate Payment Link</h1>
         <p className="text-muted-foreground mb-8">
           Configure the payment parameters. The generated link will create a
-          checkout page with a deposit address and QR code for customers to pay.
+          checkout page with a QR code for customers to scan andpay.
         </p>
 
         <div className="grid md:grid-cols-2 gap-8">
@@ -246,7 +243,9 @@ export default function GeneratePaymentLinkPage() {
                   <p className="text-lg font-semibold">
                     {amount} {selectedCurrency?.symbol}
                   </p>
-                  <p className="text-sm text-muted-foreground">{merchantName}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {merchantName}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">
                     on {selectedChain?.displayName || selectedChain?.name}
                   </p>

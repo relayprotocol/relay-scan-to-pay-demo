@@ -1,7 +1,5 @@
 import Link from "next/link";
-import Image from "next/image";
 import { RelayLogo } from "@/components/icons/RelayLogo";
-import { getChainSquaredIconUrl } from "@/lib/relay";
 
 // Pre-generated demo payment intent
 const demoPaymentIntent = {
@@ -16,108 +14,85 @@ const demoPaymentIntent = {
   chainName: "Base",
 };
 
-// Chain IDs for floating icons
-const floatingChains = [
-  { id: 1, name: "Ethereum" },
-  { id: 8453, name: "Base" },
-  { id: 42161, name: "Arbitrum" },
-  { id: 10, name: "Optimism" },
-  { id: 137, name: "Polygon" },
-];
-
-const floatingStablecoins = [
-  {
-    name: "USDC",
-    url: "https://assets.relay.link/icons/currencies/usdc.png",
-  },
-  {
-    name: "USDT",
-    url: "https://assets.relay.link/icons/currencies/usdt.png",
-  },
-];
-
-// Positions and animation configs for floating icons
-const floatingIconConfigs = [
-  { top: "8%", left: "5%", size: 48, duration: "18s", delay: "0s" },
-  { top: "15%", right: "8%", size: 40, duration: "22s", delay: "2s" },
-  { top: "55%", left: "3%", size: 36, duration: "20s", delay: "4s" },
-  { top: "65%", right: "6%", size: 44, duration: "16s", delay: "1s" },
-  { top: "35%", left: "10%", size: 32, duration: "24s", delay: "3s" },
-  { top: "25%", right: "12%", size: 42, duration: "19s", delay: "5s" },
-  { top: "75%", left: "8%", size: 38, duration: "21s", delay: "2.5s" },
-];
-
 export default function Home() {
   const demoPayUrl = `/pay?intent=${encodeURIComponent(JSON.stringify(demoPaymentIntent))}`;
 
-  // Build list of all floating icons
-  const allIcons = [
-    ...floatingChains.map((chain) => ({
-      name: chain.name,
-      url: getChainSquaredIconUrl(chain.id),
-    })),
-    ...floatingStablecoins,
-  ];
-
   return (
     <main className="min-h-screen">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden px-6 py-20 md:py-32">
-        {/* Floating background icons */}
-        <div className="pointer-events-none absolute inset-0" aria-hidden="true">
-          {allIcons.map((icon, i) => {
-            const config = floatingIconConfigs[i % floatingIconConfigs.length];
-            return (
-              <div
-                key={icon.name}
-                className="absolute animate-float"
-                style={{
-                  top: config.top,
-                  left: config.left,
-                  right: config.right,
-                  animationDuration: config.duration,
-                  animationDelay: config.delay,
-                  opacity: 0.15,
-                }}
-              >
-                <Image
-                  src={icon.url}
-                  alt=""
-                  width={config.size}
-                  height={config.size}
-                  className="rounded-lg"
-                />
-              </div>
-            );
-          })}
+      {/* Header */}
+      <header className="border-b px-6 py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between">
+          <RelayLogo width={100} height={24} />
+          <span className="text-xs text-muted-foreground">
+            Scan-to-Pay Demo
+          </span>
         </div>
+      </header>
 
-        {/* Hero content */}
-        <div className="relative z-10 mx-auto max-w-3xl text-center">
-          <div className="mb-8 flex justify-center">
-            <RelayLogo width={140} height={32} />
+      {/* Intro */}
+      <section className="mx-auto max-w-5xl px-6 py-10">
+        <p className="text-sm text-muted-foreground">
+          Prototype for payments at checkout — powered by{" "}
+          <a
+            href="https://relay.link"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-foreground underline underline-offset-2"
+          >
+            Relay
+          </a>
+          .
+        </p>
+      </section>
+
+      {/* How It Works */}
+      <section className="border-t bg-muted/30 px-6 py-20">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="mb-10 text-center text-3xl font-semibold">
+            How It Works
+          </h2>
+          <div className="grid gap-8 sm:grid-cols-3">
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold text-lg">
+                1
+              </div>
+              <h3 className="mb-2 font-medium text-lg">
+                Merchant creates a payment link
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Specify the amount, destination chain, and recipient address for
+                stablecoin payment.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold text-lg">
+                2
+              </div>
+              <h3 className="mb-2 font-medium text-lg">
+                Link generates a QR code
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                The checkout page displays a QR code for the customer to scan.
+              </p>
+            </div>
+            <div className="text-center">
+              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold text-lg">
+                3
+              </div>
+              <h3 className="mb-2 font-medium text-lg">
+                Customer scans and pays
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Customer scans the QR code with their wallet and pays with
+                stablecoins. Relay handles the rest.
+              </p>
+            </div>
           </div>
-          <h1 className="mb-6 text-5xl font-bold tracking-tight md:text-6xl">
-            Scan to Pay with Stablecoins
-          </h1>
-          <p className="mx-auto mb-8 max-w-2xl text-lg text-muted-foreground md:text-xl">
-            Accept stablecoin payments at checkout. Generate a payment link,
-            display a QR code, and get paid instantly — powered by{" "}
-            <a
-              href="https://relay.link"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-medium text-primary hover:underline"
-            >
-              Relay
-            </a>
-            .
-          </p>
         </div>
       </section>
 
       {/* Two Demo Flow Cards */}
-      <section className="mx-auto max-w-5xl px-6 pb-20">
+      <section className="mx-auto max-w-5xl px-6 py-20">
         <div className="grid gap-6 md:grid-cols-2">
           {/* Card 1: Payment Links */}
           <div className="group relative rounded-2xl border bg-card p-8 transition-shadow hover:shadow-lg">
@@ -139,7 +114,7 @@ export default function Home() {
             <h2 className="mb-2 text-2xl font-semibold">Payment Links</h2>
             <p className="mb-5 text-muted-foreground">
               Merchant generates a link, customer pays from any wallet — no
-              wallet connection needed. Uses Relay deposit addresses.
+              wallet connection needed.
             </p>
             <div className="mb-6 flex flex-wrap gap-2">
               <span className="rounded-full bg-muted px-3 py-1 text-xs font-medium">
@@ -215,87 +190,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      {/* How It Works */}
-      <section className="border-t bg-muted/30 px-6 py-20">
-        <div className="mx-auto max-w-4xl">
-          <h2 className="mb-10 text-center text-3xl font-semibold">
-            How It Works
-          </h2>
-          <div className="grid gap-8 sm:grid-cols-3">
-            <div className="text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold text-lg">
-                1
-              </div>
-              <h3 className="mb-2 font-medium text-lg">
-                Merchant creates a payment link
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Specify the amount, destination chain, and recipient address for
-                stablecoin payment.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold text-lg">
-                2
-              </div>
-              <h3 className="mb-2 font-medium text-lg">
-                Link generates a QR code
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                The checkout page displays a deposit address and QR code for the
-                customer to scan.
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground font-semibold text-lg">
-                3
-              </div>
-              <h3 className="mb-2 font-medium text-lg">
-                Customer scans and pays
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Customer scans the QR code with their wallet and pays with
-                stablecoins. Relay handles the rest.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      <footer className="border-t px-6 py-10">
-        <div className="mx-auto max-w-4xl text-center">
-          <p className="mb-3 text-sm text-muted-foreground">Powered by</p>
-          <a
-            href="https://relay.link"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 text-foreground transition-colors hover:text-primary"
-          >
-            <RelayLogo width={80} height={22} />
-          </a>
-          <div className="mt-4 flex items-center justify-center gap-4">
-            <a
-              href="https://docs.relay.link"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              Documentation
-            </a>
-            <span className="text-muted-foreground/30">|</span>
-            <a
-              href="https://github.com/relayprotocol"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-muted-foreground transition-colors hover:text-foreground"
-            >
-              GitHub
-            </a>
-          </div>
-        </div>
-      </footer>
     </main>
   );
 }

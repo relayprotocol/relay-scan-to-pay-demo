@@ -50,7 +50,7 @@ interface TokenWithBalance {
   chainName: string;
   balance: string;
   balanceWei: bigint;
-  balanceUsd: string;
+  balanceUsd: string | null; // null = price unavailable
   isStablecoin: boolean;
   hasInsufficientBalance: boolean;
   requiredAmount: string;
@@ -147,21 +147,26 @@ export function PaymentCurrencySelector({
                 const balanceNum = parseFloat(formattedBalance);
 
                 // For stablecoins, USD value = balance; for native tokens, fetch price
-                let balanceUsd: string;
+                let balanceUsd: string | null;
                 let requiredAmount: string;
                 if (token.isStablecoin) {
                   balanceUsd = balanceNum.toFixed(2);
                   requiredAmount = usdAmount;
                 } else {
-                  // Fetch native token price for USD conversion
+                  // Fetch token price via Relay price API
                   try {
                     const price = await getNativeTokenPrice(chainId);
-                    balanceUsd = (balanceNum * price).toFixed(2);
-                    // Required amount in native token = usdAmount / price
-                    const requiredTokenAmount = parseFloat(usdAmount) / price;
-                    requiredAmount = requiredTokenAmount.toString();
+                    if (price > 0) {
+                      balanceUsd = (balanceNum * price).toFixed(2);
+                      // Required amount in native token = usdAmount / price
+                      const requiredTokenAmount = parseFloat(usdAmount) / price;
+                      requiredAmount = requiredTokenAmount.toString();
+                    } else {
+                      balanceUsd = null;
+                      requiredAmount = usdAmount;
+                    }
                   } catch {
-                    balanceUsd = "0.00";
+                    balanceUsd = null;
                     requiredAmount = usdAmount;
                   }
                 }
@@ -204,12 +209,14 @@ export function PaymentCurrencySelector({
       const results = await Promise.all(tokenPromises);
       const validTokens = results.filter((t): t is TokenWithBalance => t !== null);
 
-      // Sort: tokens with sufficient balance first, then by USD balance
+      // Sort: tokens with sufficient balance first, then by USD balance (nulls last)
       validTokens.sort((a, b) => {
         if (a.hasInsufficientBalance !== b.hasInsufficientBalance) {
           return a.hasInsufficientBalance ? 1 : -1;
         }
-        return parseFloat(b.balanceUsd) - parseFloat(a.balanceUsd);
+        const aUsd = a.balanceUsd !== null ? parseFloat(a.balanceUsd) : -1;
+        const bUsd = b.balanceUsd !== null ? parseFloat(b.balanceUsd) : -1;
+        return bUsd - aUsd;
       });
 
       setTokens(validTokens);
@@ -456,13 +463,19 @@ export function PaymentCurrencySelector({
 
                   {/* Balance */}
                   <div className="text-right">
-                    <div className="font-medium">${token.balanceUsd}</div>
+                    <div className="font-medium">
+                      {token.balanceUsd !== null ? `$${parseFloat(token.balanceUsd).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                    </div>
                     <div className="text-xs text-muted-foreground">
-                      {parseFloat(token.balance).toFixed(2)} {token.symbol}
+                      {parseFloat(token.balance).toLocaleString(undefined, {
+                        maximumSignificantDigits: 4,
+                        minimumSignificantDigits: 1,
+                      })}{" "}
+                      {token.symbol}
                     </div>
                     {token.hasInsufficientBalance && (
                       <div className="text-xs text-destructive mt-0.5">
-                        Need {parseFloat(token.requiredAmount).toFixed(2)}
+                        Need ≈{parseFloat(token.requiredAmount).toLocaleString(undefined, { maximumSignificantDigits: 4 })} {token.symbol}
                       </div>
                     )}
                   </div>

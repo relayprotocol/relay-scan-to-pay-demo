@@ -144,6 +144,7 @@ export default function WalletPage() {
     if (
       isDirectSend ||
       !parsedPayment ||
+      !parsedPayment.value ||
       !address ||
       !selectedCurrency ||
       !resolvedPayment
@@ -151,13 +152,15 @@ export default function WalletPage() {
       return undefined;
     }
 
+    // For EXACT_OUTPUT, amount is always the merchant's requested destination amount
+    // (parsedPayment.value), never the origin token amount.
     return {
       user: address,
       originChainId: selectedCurrency.chainId,
       originCurrency: selectedCurrency.address || "0x0000000000000000000000000000000000000000",
       destinationChainId: parsedPayment.chainId,
       destinationCurrency: parsedPayment.tokenAddress!,
-      amount: resolvedPayment.resolvedValue,
+      amount: parsedPayment.value!, // guarded above
       recipient: parsedPayment.recipient!,
       tradeType: "EXACT_OUTPUT" as const,
       referrer: "relay-scan-to-pay-demo",
@@ -536,17 +539,13 @@ export default function WalletPage() {
   const insufficientGas = !isNativeSend && nativeBalance !== null && nativeBalance < MIN_GAS_WEI;
 
   // Handle currency selection
+  // Note: we do NOT update resolvedValue here. Since tradeType is EXACT_OUTPUT,
+  // the destination amount (resolvedValue) is always fixed to what the merchant requested.
   const handleCurrencySelect = useCallback(
-    (currency: PaymentCurrency, calculatedAmount: string) => {
+    (currency: PaymentCurrency, _calculatedAmount: string) => {
       setSelectedCurrency(currency);
-      if (resolvedPayment) {
-        setResolvedPayment({
-          ...resolvedPayment,
-          resolvedValue: BigInt(Math.floor(parseFloat(calculatedAmount) * 10 ** currency.decimals)).toString(),
-        });
-      }
     },
-    [resolvedPayment]
+    []
   );
 
   // Get original currency from parsed payment
@@ -614,7 +613,9 @@ export default function WalletPage() {
         scannerState={scannerState}
         resolvedPayment={resolvedPayment}
         error={error}
-        isSending={isSending || isSendingNative || isLoadingQuote}
+        isSending={isSending || isSendingNative}
+        isQuoteLoading={isLoadingQuote && !isDirectSend}
+        relayQuote={relayQuote ?? null}
         selectedCurrency={selectedCurrency}
         insufficientBalance={insufficientBalance}
         insufficientGas={insufficientGas}

@@ -15,12 +15,15 @@ import { cn, truncateAddress, formatUsd } from "@/lib/utils";
 import { formatWeiToDisplay, CHAIN_NAMES } from "@/lib/wallet";
 import { getChainSquaredIconUrl } from "@/lib/relay";
 import type { ResolvedPayment, PaymentCurrency } from "@/lib/wallet";
+import type { QuoteResponse } from "@/lib/relay";
 
 interface PaymentPreviewProps {
   payment: ResolvedPayment;
   onConfirm: () => void;
   onCancel: () => void;
   isLoading?: boolean;
+  isQuoteLoading?: boolean;
+  relayQuote?: QuoteResponse | null;
   className?: string;
   selectedCurrency?: PaymentCurrency | null;
   onChangeCurrency?: () => void;
@@ -34,6 +37,8 @@ export function PaymentPreview({
   onConfirm,
   onCancel,
   isLoading = false,
+  isQuoteLoading = false,
+  relayQuote = null,
   className,
   selectedCurrency,
   onChangeCurrency,
@@ -41,10 +46,18 @@ export function PaymentPreview({
   insufficientGas = false,
   isDirectSend = true,
 }: PaymentPreviewProps) {
-  // Format the crypto amount for display
-  const cryptoAmount = useMemo(() => {
+  // Destination amount (what the merchant receives) — always USDC or the destination token
+  const destinationAmount = useMemo(() => {
     return formatWeiToDisplay(payment.resolvedValue, payment.decimals);
   }, [payment.resolvedValue, payment.decimals]);
+
+  // For Relay path: pull origin amounts directly from the quote's currencyIn
+  const quoteCurrencyIn = relayQuote?.details?.currencyIn;
+  const originAmountFormatted = quoteCurrencyIn?.amountFormatted;
+  const originSymbol = quoteCurrencyIn?.currency?.symbol;
+  const originAmountUsd = quoteCurrencyIn?.amountUsd
+    ? parseFloat(quoteCurrencyIn.amountUsd).toFixed(2)
+    : null;
 
   // Get chain name
   const chainName = CHAIN_NAMES[payment.chainId] || `Chain ${payment.chainId}`;
@@ -62,9 +75,15 @@ export function PaymentPreview({
   const formattedBalance = selectedCurrency?.balance
     ? parseFloat(selectedCurrency.balance).toLocaleString(undefined, {
         minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        maximumFractionDigits: 6,
       })
     : null;
+
+  // USD total — use quote's currencyIn.amountUsd when available (includes swap fees),
+  // fall back to the merchant's USD amount for direct sends
+  const totalUsd = !isDirectSend && originAmountUsd
+    ? originAmountUsd
+    : payment.resolvedUsdAmount;
 
   return (
     <div className={cn("w-full", className)}>
@@ -74,7 +93,7 @@ export function PaymentPreview({
           <Coins className="w-8 h-8 text-primary" />
         </div>
         <h2 className="text-2xl font-bold">
-          Pay {formatUsd(payment.resolvedUsdAmount)}
+          Pay {formatUsd(totalUsd)}
         </h2>
       </div>
 
@@ -110,7 +129,7 @@ export function PaymentPreview({
       {/* Pay With Section */}
       <button
         onClick={onChangeCurrency}
-        disabled={isLoading || !onChangeCurrency}
+        disabled={isLoading || isQuoteLoading || !onChangeCurrency}
         className="w-full p-4 bg-muted/50 hover:bg-muted rounded-xl border border-border transition-colors mb-4 text-left"
       >
         <div className="flex items-center justify-between">
@@ -171,13 +190,38 @@ export function PaymentPreview({
 
       {/* Transaction Details */}
       <div className="border border-border rounded-xl p-4 space-y-3 mb-4">
-        {/* Amount in crypto */}
+        {/* You pay — origin amount (from quote for Relay path, destination for direct) */}
         <div className="flex justify-between items-center">
-          <span className="text-sm text-muted-foreground">Amount</span>
-          <span className="text-sm font-medium">
-            {cryptoAmount} {displaySymbol}
-          </span>
+          <span className="text-sm text-muted-foreground">You pay</span>
+          {isQuoteLoading ? (
+            <div className="h-4 w-24 bg-muted animate-pulse rounded" />
+          ) : !isDirectSend && originAmountFormatted && originSymbol ? (
+            <span className="text-sm font-medium">
+              {parseFloat(originAmountFormatted).toLocaleString(undefined, {
+                maximumSignificantDigits: 6,
+              })}{" "}
+              {originSymbol}
+            </span>
+          ) : (
+            <span className="text-sm font-medium">
+              {destinationAmount} {payment.symbol}
+            </span>
+          )}
         </div>
+
+        {/* Merchant receives — only show for Relay path so user knows the dest amount */}
+        {!isDirectSend && (
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-muted-foreground">Merchant receives</span>
+            {isQuoteLoading ? (
+              <div className="h-4 w-20 bg-muted animate-pulse rounded" />
+            ) : (
+              <span className="text-sm font-medium">
+                {destinationAmount} {payment.symbol}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Recipient */}
         <div className="flex justify-between items-center">
@@ -187,21 +231,19 @@ export function PaymentPreview({
           </span>
         </div>
 
-        {/* Network Fee (placeholder - could be enhanced with actual gas estimate) */}
-        <div className="flex justify-between items-center">
-          <span className="text-sm text-muted-foreground">Network fee</span>
-          <span className="text-sm text-muted-foreground">~$0.01</span>
-        </div>
-
         {/* Divider */}
         <div className="border-t border-border" />
 
         {/* Total */}
         <div className="flex justify-between items-center">
           <span className="font-medium">Total</span>
-          <span className="font-bold text-lg">
-            {formatUsd(payment.resolvedUsdAmount)}
-          </span>
+          {isQuoteLoading ? (
+            <div className="h-5 w-16 bg-muted animate-pulse rounded" />
+          ) : (
+            <span className="font-bold text-lg">
+              {formatUsd(totalUsd)}
+            </span>
+          )}
         </div>
       </div>
 
@@ -232,14 +274,19 @@ export function PaymentPreview({
       {/* Pay Button */}
       <Button
         onClick={onConfirm}
-        disabled={isLoading || insufficientBalance || insufficientGas}
+        disabled={isLoading || isQuoteLoading || insufficientBalance || insufficientGas}
         className="w-full h-12 text-base font-medium rounded-xl mb-4"
         size="lg"
       >
-        {isLoading ? (
+        {isQuoteLoading ? (
           <>
             <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-            Confirming...
+            Calculating total...
+          </>
+        ) : isLoading ? (
+          <>
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            Processing payment...
           </>
         ) : insufficientBalance ? (
           "Insufficient balance"
