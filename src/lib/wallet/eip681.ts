@@ -36,6 +36,7 @@ const VALID_PARAMS = new Set([
   "usdAmount",
   "merchantName",
   "description",
+  "imageUrl",
   // Common ERC-20 function params
   "address",
   "uint256",
@@ -204,6 +205,7 @@ export function parseEIP681(uri: string): ParsedPayment | null {
   const usdAmount = parameters.usdAmount;
   const merchantName = parameters.merchantName;
   const description = parameters.description;
+  const imageUrl = parameters.imageUrl;
 
   // Determine if this is an ERC-20 transfer
   const isERC20 =
@@ -245,7 +247,8 @@ export function parseEIP681(uri: string): ParsedPayment | null {
       key !== "gasPrice" &&
       key !== "usdAmount" &&
       key !== "merchantName" &&
-      key !== "description"
+      key !== "description" &&
+      key !== "imageUrl"
     ) {
       // For uint256, ensure it's parsed correctly
       if (
@@ -276,6 +279,7 @@ export function parseEIP681(uri: string): ParsedPayment | null {
     recipient: isERC20 ? recipient : targetAddress,
     merchantName,
     description,
+    imageUrl,
   };
 }
 

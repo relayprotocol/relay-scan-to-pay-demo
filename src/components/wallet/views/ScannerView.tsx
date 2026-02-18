@@ -98,7 +98,7 @@ export function ScannerView({
             <X className="w-5 h-5" />
           </button>
 
-          <h1 className="text-lg font-semibold">Scan to Pay</h1>
+          <h1 className="text-lg font-semibold">Confirm Payment</h1>
 
           <div className="w-5" /> {/* Spacer */}
         </div>
@@ -153,23 +153,6 @@ export function ScannerView({
         {/* Preview State */}
         {scannerState === "preview" && resolvedPayment && (
           <div className="space-y-6">
-            <div className="text-center mb-4">
-              {resolvedPayment.merchantName && (
-                <h2 className="text-xl font-semibold">{resolvedPayment.merchantName}</h2>
-              )}
-              {resolvedPayment.description && (
-                <p className="text-sm text-muted-foreground mt-1">
-                  {resolvedPayment.description}
-                </p>
-              )}
-              {!resolvedPayment.merchantName && (
-                <h2 className="text-xl font-semibold">Confirm Payment</h2>
-              )}
-              <p className="text-sm text-muted-foreground mt-1">
-                Review the details below
-              </p>
-            </div>
-
             <PaymentPreview
               payment={resolvedPayment}
               onConfirm={onConfirm}
@@ -238,55 +221,44 @@ export function ScannerView({
           const explorerUrl = directTxHash && txChainId
             ? `${EXPLORER_URLS[txChainId] || "https://etherscan.io"}/tx/${directTxHash}`
             : null;
+          const relayUrl = relayRequestId
+            ? `https://relay.link/transaction/${relayRequestId}`
+            : null;
+          const viewUrl = explorerUrl || relayUrl;
+          const merchantName = resolvedPayment?.merchantName;
 
           return (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center mb-4">
+            <div className="flex flex-col items-center justify-center py-16 gap-4">
+              <div className="w-16 h-16 rounded-full bg-green-500/10 flex items-center justify-center">
                 <CheckCircle2 className="w-10 h-10 text-green-500" />
               </div>
-              <h2 className="text-xl font-semibold mb-2">Payment Complete!</h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                Your payment has been confirmed
-              </p>
+              <div className="text-center">
+                <h2 className="text-xl font-semibold">Payment successful</h2>
+                {merchantName && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    to {merchantName}
+                  </p>
+                )}
+              </div>
 
-              {/* Block explorer link for direct sends */}
-              {explorerUrl && (
+              {viewUrl && (
                 <a
-                  href={explorerUrl}
+                  href={viewUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 mb-4 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
+                  className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   View transaction
-                  <ExternalLink className="w-4 h-4" />
+                  <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               )}
 
-              {/* Relay link for cross-chain sends */}
-              {!explorerUrl && relayRequestId && (
-                <a
-                  href={`https://relay.link/transaction/${relayRequestId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center justify-center gap-2 w-full px-4 py-3 mb-4 bg-primary text-primary-foreground font-medium rounded-lg hover:bg-primary/90 transition-colors"
-                >
-                  View payment
-                  <ExternalLink className="w-4 h-4" />
-                </a>
-              )}
-
-              <div className="flex gap-3 w-full">
-                <Button
-                  variant="outline"
-                  onClick={onCancel}
-                  className="flex-1"
-                >
-                  Scan Another
-                </Button>
-                <Button onClick={onClose} className="flex-1">
-                  Done
-                </Button>
-              </div>
+              <Button
+                onClick={onClose}
+                className="w-full mt-4 h-12 rounded-xl bg-black text-white hover:bg-black/85"
+              >
+                Done
+              </Button>
             </div>
           );
         })()}

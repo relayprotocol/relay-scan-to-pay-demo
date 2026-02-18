@@ -34,6 +34,8 @@ export interface ParsedPayment {
   merchantName?: string;
   /** Merchant description (our extension to EIP-681) */
   description?: string;
+  /** Product/item image URL (our extension to EIP-681) */
+  imageUrl?: string;
 }
 
 /**
