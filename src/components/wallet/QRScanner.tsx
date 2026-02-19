@@ -79,6 +79,7 @@ export function QRScanner({ onScan, onError, className }: QRScannerProps) {
       try {
         if (!scannerRef.current) {
           scannerRef.current = new Html5Qrcode(scannerId, {
+            verbose: false,
             formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
           });
         }
