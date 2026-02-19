@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import { Geist, Geist_Mono, Inter, Chivo } from "next/font/google"
 import "./globals.css"
 import { Providers } from "@/providers"
 import { fetchChains } from "@/lib/relay"
@@ -12,6 +12,17 @@ const geistSans = Geist({
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
+})
+
+const inter = Inter({
+  variable: "--font-inter",
+  subsets: ["latin"],
+})
+
+const chivo = Chivo({
+  variable: "--font-chivo",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
 })
 
 export const metadata: Metadata = {
@@ -48,7 +59,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} ${inter.variable} ${chivo.variable} antialiased`}
       >
         <Providers chains={chains}>{children}</Providers>
       </body>
