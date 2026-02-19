@@ -308,11 +308,13 @@ export function PaymentCurrencySelector({
         <ResponsiveDialogHeader className="flex-row items-center px-4 py-4 border-b space-y-0">
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-muted transition-colors mr-3"
+            className="p-1.5 rounded-lg hover:bg-muted transition-colors shrink-0"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <ResponsiveDialogTitle className="flex-1">Choose asset</ResponsiveDialogTitle>
+          <ResponsiveDialogTitle className="flex-1 text-center">Choose asset</ResponsiveDialogTitle>
+          {/* Spacer matching button width to keep title truly centered */}
+          <div className="w-8 h-8 shrink-0" />
         </ResponsiveDialogHeader>
 
         {/* Chain Filter */}

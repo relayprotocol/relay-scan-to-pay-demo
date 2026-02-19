@@ -169,6 +169,8 @@ export function QRScanner({ onScan, onError, className }: QRScannerProps) {
 
   return (
     <div className={cn("relative w-full", className)} ref={containerRef}>
+      {/* Force the library-injected video to fill the square container */}
+      <style>{`#${scannerId} video { width: 100% !important; height: 100% !important; object-fit: cover !important; }`}</style>
       {/* Scanner container */}
       <div
         id={scannerId}
