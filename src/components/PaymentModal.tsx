@@ -59,7 +59,7 @@ export function PaymentModal({ product, onClose }: PaymentModalProps) {
         RECIPIENT,
         amountSmallest,
         product.priceUsd.toFixed(2),
-        "Demo Coffee Shop",
+        "Node Coffee Shop",
         product.description,
         product.imageUrl,
       ),
@@ -87,7 +87,7 @@ export function PaymentModal({ product, onClose }: PaymentModalProps) {
         onClick={onClose}
       />
       {/* Modal panel */}
-      <div className="relative w-full sm:max-w-sm bg-background rounded-t-3xl sm:rounded-2xl shadow-xl overflow-hidden max-h-[90vh] overflow-y-auto">
+      <div className="relative w-full sm:max-w-[400px] bg-background rounded-t-3xl sm:rounded-2xl shadow-xl overflow-hidden max-h-[90vh] overflow-y-auto">
         {status === "success" ? (
           <SuccessView
             txHash={txHash}
@@ -145,7 +145,7 @@ function QRView({
 
       {/* Title */}
       <div className="text-center mb-4">
-        <h2 className="text-xl font-bold">Pay Demo Coffee Shop</h2>
+        <h2 className="text-xl font-bold">Pay Node Coffee Shop</h2>
         <p className="text-sm text-muted-foreground mt-1">{product.description}</p>
       </div>
 
