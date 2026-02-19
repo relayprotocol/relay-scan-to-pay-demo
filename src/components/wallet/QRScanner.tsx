@@ -78,7 +78,9 @@ export function QRScanner({ onScan, onError, className }: QRScannerProps) {
     async (mode: "environment" | "user") => {
       try {
         if (!scannerRef.current) {
-          scannerRef.current = new Html5Qrcode(scannerId);
+          scannerRef.current = new Html5Qrcode(scannerId, {
+            formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+          });
         }
 
         const scanner = scannerRef.current;
@@ -94,7 +96,6 @@ export function QRScanner({ onScan, onError, className }: QRScannerProps) {
             fps: 15,
             qrbox: { width: 280, height: 280 },
             disableFlip: true,
-            formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
             videoConstraints: {
               facingMode: mode,
               width: { ideal: 1280 },
