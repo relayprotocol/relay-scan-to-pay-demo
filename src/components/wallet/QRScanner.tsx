@@ -30,18 +30,24 @@ export function QRScanner({ onScan, onError, className }: QRScannerProps) {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
-  const [facingMode, setFacingMode] = useState<"environment" | "user">(
-    "environment"
-  );
+  const [selectedCamera, setSelectedCamera] = useState<string | null>(null);
 
   const scannerId = "qr-scanner-container";
 
-  // Get available cameras (used to determine if camera switching is possible)
+  // Get available cameras
   const getCameras = useCallback(async () => {
     try {
       const devices = await Html5Qrcode.getCameras();
       if (devices && devices.length > 0) {
         setCameras(devices);
+        // Prefer back camera on mobile
+        const backCamera = devices.find(
+          (d) =>
+            d.label.toLowerCase().includes("back") ||
+            d.label.toLowerCase().includes("rear") ||
+            d.label.toLowerCase().includes("environment")
+        );
+        setSelectedCamera(backCamera?.id || devices[0].id);
         setHasPermission(true);
         return true;
       } else {
@@ -73,62 +79,54 @@ export function QRScanner({ onScan, onError, className }: QRScannerProps) {
     setIsScanning(false);
   }, []);
 
-  // Start scanning with a given facing mode
-  const startScanning = useCallback(
-    async (mode: "environment" | "user") => {
-      try {
-        if (!scannerRef.current) {
-          scannerRef.current = new Html5Qrcode(scannerId, {
-            verbose: false,
-            formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-          });
-        }
+  // Start scanning
+  const startScanning = useCallback(async () => {
+    if (!selectedCamera || isScanning) return;
 
-        const scanner = scannerRef.current;
-
-        // Guard against double-start using actual scanner state
-        if (scanner.getState() === Html5QrcodeScannerState.SCANNING) {
-          return;
-        }
-
-        await scanner.start(
-          { facingMode: mode },
-          {
-            fps: 15,
-            qrbox: { width: 280, height: 280 },
-            disableFlip: true,
-            videoConstraints: {
-              facingMode: mode,
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            },
-          },
-          (decodedText) => {
-            onScan(decodedText);
-            stopScanning();
-          },
-          () => {
-            // QR code not detected - called frequently, ignore
-          }
-        );
-
-        setIsScanning(true);
-        setErrorMessage(null);
-      } catch (err) {
-        console.error("Failed to start scanner:", err);
-        setErrorMessage("Failed to start camera. Please try again.");
-        setIsScanning(false);
+    try {
+      if (!scannerRef.current) {
+        scannerRef.current = new Html5Qrcode(scannerId, {
+          verbose: false,
+          formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        });
       }
-    },
-    [onScan, stopScanning]
-  );
+
+      const scanner = scannerRef.current;
+
+      if (scanner.getState() === Html5QrcodeScannerState.SCANNING) {
+        return;
+      }
+
+      await scanner.start(
+        selectedCamera,
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1,
+        },
+        (decodedText) => {
+          onScan(decodedText);
+          stopScanning();
+        },
+        () => {
+          // QR code not detected - called frequently, ignore
+        }
+      );
+
+      setIsScanning(true);
+      setErrorMessage(null);
+    } catch (err) {
+      console.error("Failed to start scanner:", err);
+      setErrorMessage("Failed to start camera. Please try again.");
+      setIsScanning(false);
+    }
+  }, [selectedCamera, isScanning, onScan, stopScanning]);
 
   // Request camera permission and get cameras on mount
   useEffect(() => {
     getCameras();
 
     return () => {
-      // Cleanup on unmount
       if (scannerRef.current) {
         try {
           const state = scannerRef.current.getState();
@@ -146,27 +144,28 @@ export function QRScanner({ onScan, onError, className }: QRScannerProps) {
   const handleRetry = async () => {
     setErrorMessage(null);
     const success = await getCameras();
-    if (success) {
-      startScanning(facingMode);
+    if (success && selectedCamera) {
+      startScanning();
     }
   };
 
-  // Switch between front and back camera
+  // Switch camera
   const handleSwitchCamera = async () => {
     if (cameras.length < 2) return;
+
     await stopScanning();
-    const newMode = facingMode === "environment" ? "user" : "environment";
-    setFacingMode(newMode);
-    await startScanning(newMode);
+
+    const currentIndex = cameras.findIndex((c) => c.id === selectedCamera);
+    const nextIndex = (currentIndex + 1) % cameras.length;
+    setSelectedCamera(cameras[nextIndex].id);
   };
 
-  // Auto-start when permission is granted or facing mode changes
+  // Auto-start when camera is selected
   useEffect(() => {
-    if (hasPermission) {
-      startScanning(facingMode);
+    if (selectedCamera && hasPermission && !isScanning) {
+      startScanning();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasPermission, facingMode]);
+  }, [selectedCamera, hasPermission, isScanning, startScanning]);
 
   return (
     <div className={cn("relative w-full", className)} ref={containerRef}>
