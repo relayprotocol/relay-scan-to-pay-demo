@@ -96,7 +96,6 @@ export function HomeView({
                 <button
                   onClick={() => {
                     onCopyAddress();
-                    setShowMenu(false);
                   }}
                   className="w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2"
                 >

@@ -8,7 +8,11 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Html5Qrcode, Html5QrcodeScannerState } from "html5-qrcode";
+import {
+  Html5Qrcode,
+  Html5QrcodeScannerState,
+  Html5QrcodeSupportedFormats,
+} from "html5-qrcode";
 import { Camera, CameraOff, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,24 +30,18 @@ export function QRScanner({ onScan, onError, className }: QRScannerProps) {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cameras, setCameras] = useState<{ id: string; label: string }[]>([]);
-  const [selectedCamera, setSelectedCamera] = useState<string | null>(null);
+  const [facingMode, setFacingMode] = useState<"environment" | "user">(
+    "environment"
+  );
 
   const scannerId = "qr-scanner-container";
 
-  // Get available cameras
+  // Get available cameras (used to determine if camera switching is possible)
   const getCameras = useCallback(async () => {
     try {
       const devices = await Html5Qrcode.getCameras();
       if (devices && devices.length > 0) {
         setCameras(devices);
-        // Prefer back camera on mobile
-        const backCamera = devices.find(
-          (d) =>
-            d.label.toLowerCase().includes("back") ||
-            d.label.toLowerCase().includes("rear") ||
-            d.label.toLowerCase().includes("environment")
-        );
-        setSelectedCamera(backCamera?.id || devices[0].id);
         setHasPermission(true);
         return true;
       } else {
@@ -60,50 +58,6 @@ export function QRScanner({ onScan, onError, className }: QRScannerProps) {
     }
   }, [onError]);
 
-  // Start scanning
-  const startScanning = useCallback(async () => {
-    if (!selectedCamera || isScanning) return;
-
-    try {
-      // Create new scanner instance
-      if (!scannerRef.current) {
-        scannerRef.current = new Html5Qrcode(scannerId);
-      }
-
-      const scanner = scannerRef.current;
-
-      // Check if already scanning
-      if (scanner.getState() === Html5QrcodeScannerState.SCANNING) {
-        return;
-      }
-
-      await scanner.start(
-        selectedCamera,
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1,
-        },
-        (decodedText) => {
-          // Successfully scanned
-          onScan(decodedText);
-          // Optionally stop scanning after successful scan
-          stopScanning();
-        },
-        () => {
-          // QR code not detected - this is called frequently, ignore
-        }
-      );
-
-      setIsScanning(true);
-      setErrorMessage(null);
-    } catch (err) {
-      console.error("Failed to start scanner:", err);
-      setErrorMessage("Failed to start camera. Please try again.");
-      setIsScanning(false);
-    }
-  }, [selectedCamera, isScanning, onScan]);
-
   // Stop scanning
   const stopScanning = useCallback(async () => {
     if (scannerRef.current) {
@@ -118,6 +72,54 @@ export function QRScanner({ onScan, onError, className }: QRScannerProps) {
     }
     setIsScanning(false);
   }, []);
+
+  // Start scanning with a given facing mode
+  const startScanning = useCallback(
+    async (mode: "environment" | "user") => {
+      try {
+        if (!scannerRef.current) {
+          scannerRef.current = new Html5Qrcode(scannerId);
+        }
+
+        const scanner = scannerRef.current;
+
+        // Guard against double-start using actual scanner state
+        if (scanner.getState() === Html5QrcodeScannerState.SCANNING) {
+          return;
+        }
+
+        await scanner.start(
+          { facingMode: mode },
+          {
+            fps: 15,
+            qrbox: { width: 280, height: 280 },
+            disableFlip: true,
+            formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+            videoConstraints: {
+              facingMode: mode,
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+          },
+          (decodedText) => {
+            onScan(decodedText);
+            stopScanning();
+          },
+          () => {
+            // QR code not detected - called frequently, ignore
+          }
+        );
+
+        setIsScanning(true);
+        setErrorMessage(null);
+      } catch (err) {
+        console.error("Failed to start scanner:", err);
+        setErrorMessage("Failed to start camera. Please try again.");
+        setIsScanning(false);
+      }
+    },
+    [onScan, stopScanning]
+  );
 
   // Request camera permission and get cameras on mount
   useEffect(() => {
@@ -142,28 +144,27 @@ export function QRScanner({ onScan, onError, className }: QRScannerProps) {
   const handleRetry = async () => {
     setErrorMessage(null);
     const success = await getCameras();
-    if (success && selectedCamera) {
-      startScanning();
+    if (success) {
+      startScanning(facingMode);
     }
   };
 
-  // Switch camera
+  // Switch between front and back camera
   const handleSwitchCamera = async () => {
     if (cameras.length < 2) return;
-
     await stopScanning();
-
-    const currentIndex = cameras.findIndex((c) => c.id === selectedCamera);
-    const nextIndex = (currentIndex + 1) % cameras.length;
-    setSelectedCamera(cameras[nextIndex].id);
+    const newMode = facingMode === "environment" ? "user" : "environment";
+    setFacingMode(newMode);
+    await startScanning(newMode);
   };
 
-  // Auto-start when camera is selected
+  // Auto-start when permission is granted or facing mode changes
   useEffect(() => {
-    if (selectedCamera && hasPermission && !isScanning) {
-      startScanning();
+    if (hasPermission) {
+      startScanning(facingMode);
     }
-  }, [selectedCamera, hasPermission, isScanning, startScanning]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasPermission, facingMode]);
 
   return (
     <div className={cn("relative w-full", className)} ref={containerRef}>
